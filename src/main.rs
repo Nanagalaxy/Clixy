@@ -33,8 +33,116 @@ fn check_accessibility(path: &Path) -> Result<()> {
     }
 }
 
+fn copy_directories(
+    source_path: &str,
+    destination_path: &str,
+    dir_content: &DirContent,
+) -> Result<()> {
+    let m = MultiProgress::new();
+
+    let pb_copy = m.add(ProgressBar::new(dir_content.directories.len() as u64));
+    pb_copy.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed}] [{wide_bar:.cyan/blue}] {pos}/{len} {msg}")
+            .unwrap_or(ProgressStyle::default_bar())
+            .progress_chars("#>-"),
+    );
+
+    pb_copy.set_message("Copying directories");
+    let pb_copy = Arc::new(pb_copy);
+
+    let pb_copy_clone = Arc::clone(&pb_copy);
+    let ticker = thread::spawn(move || {
+        while !pb_copy_clone.is_finished() {
+            pb_copy_clone.tick();
+            thread::sleep(Duration::from_millis(100));
+        }
+    });
+
+    for dir in &dir_content.directories {
+        let relative_path = match Path::new(dir).strip_prefix(source_path) {
+            Ok(rel_path) => rel_path,
+            Err(_) => {
+                eprintln!("Impossible to determine relative path for {:?}", dir);
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Failed to determine relative path",
+                ));
+            }
+        };
+
+        let destination_dir = Path::new(destination_path).join(relative_path);
+
+        if let Err(e) = create_dir_all(&destination_dir) {
+            eprintln!("Unable to create directory {:?}: {:?}", destination_dir, e);
+            return Err(Error::new(ErrorKind::Other, "Failed to create directory"));
+        }
+
+        pb_copy.inc(1);
+    }
+
+    pb_copy.finish_with_message("Directories copied successfully");
+
+    ticker.join().unwrap();
+
+    Ok(())
+}
+
+fn copy_files(source_path: &str, destination_path: &str, dir_content: &DirContent) -> Result<()> {
+    let m = MultiProgress::new();
+
+    let pb_copy = m.add(ProgressBar::new(dir_content.files.len() as u64));
+    pb_copy.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed}] [{wide_bar:.cyan/blue}] {pos}/{len} {msg}")
+            .unwrap_or(ProgressStyle::default_bar())
+            .progress_chars("#>-"),
+    );
+
+    pb_copy.set_message("Copying files");
+    let pb_copy = Arc::new(pb_copy);
+
+    let pb_copy_clone = Arc::clone(&pb_copy);
+    let ticker = thread::spawn(move || {
+        while !pb_copy_clone.is_finished() {
+            pb_copy_clone.tick();
+            thread::sleep(Duration::from_millis(100));
+        }
+    });
+
+    dir_content.files.par_iter().for_each(|item| {
+        let pb_copy = Arc::clone(&pb_copy);
+
+        let relative_path = match Path::new(item).strip_prefix(source_path) {
+            Ok(rel_path) => rel_path,
+            Err(_) => {
+                eprintln!("Impossible to determine relative path for {:?}", item);
+                return;
+            }
+        };
+
+        let destination_file = Path::new(destination_path).join(relative_path);
+
+        if let Err(e) = copy(item, &destination_file) {
+            eprintln!(
+                "Error copying file {:?} to {:?}: {:?}",
+                item, destination_file, e
+            );
+            return;
+        }
+
+        pb_copy.inc(1);
+    });
+
+    pb_copy.finish_with_message("Files copied successfully");
+
+    ticker.join().unwrap();
+
+    Ok(())
+}
+
 #[derive(PartialEq)]
-enum CopyPossiblesOptions {
+enum CopyTypesOptions {
     None,
     Replace,
     Complete,
@@ -44,7 +152,9 @@ enum CopyPossiblesOptions {
 fn do_copy(
     source_path: &str,
     destination_path: &str,
-    option: CopyPossiblesOptions,
+    option: CopyTypesOptions,
+    copy_target: bool,
+    only_folders: bool,
 ) -> Result<DirContent> {
     let m = MultiProgress::new();
 
@@ -117,7 +227,7 @@ fn do_copy(
 
         // Checks that the destination folder is empty
         if let Ok(content) = read_dir(destination_path) {
-            if option == CopyPossiblesOptions::None && content.count() > 0 {
+            if option == CopyTypesOptions::None && content.count() > 0 {
                 eprintln!("Destination folder is not empty, please provide an empty folder or use an option");
                 return Err(Error::new(
                     ErrorKind::AlreadyExists,
@@ -136,12 +246,26 @@ fn do_copy(
         }
     }
 
+    // Copy directories first
+    if let Err(e) = copy_directories(source_path, destination_path, &dir_content) {
+        return Err(e);
+    }
+
+    if only_folders {
+        // If only_folders is set, return early with an empty DirContent
+        return Ok(DirContent {
+            dir_size: 0,
+            directories: Vec::new(),
+            files: Vec::new(),
+        });
+    }
+
     // Copy options
     let mut options = CopyOptions::new();
     options.copy_inside = true; // Copies the contents of the folder rather than the folder itself
 
     // Remove the files in the list that are already in the destination folder if the complete flag is set
-    if option == CopyPossiblesOptions::Complete {
+    if option == CopyTypesOptions::Complete {
         dir_content.files.retain(|item| {
             let destination_file =
                 Path::new(destination_path).join(match Path::new(item).strip_prefix(source_path) {
@@ -154,7 +278,7 @@ fn do_copy(
 
             !destination_file.exists()
         });
-    } else if option == CopyPossiblesOptions::Update {
+    } else if option == CopyTypesOptions::Update {
         // Remove the files in the list that are already in the destination folder and are older than the source files
         dir_content.files.retain(|item| {
             let destination_file =
@@ -193,68 +317,10 @@ fn do_copy(
         });
     }
 
-    // Create a progress bar for the copying of the files
-    let pb_copy = m.add(ProgressBar::new(dir_content.files.len() as u64));
-    pb_copy.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed}] [{wide_bar:.cyan/blue}] {pos}/{len} {msg}")
-            .unwrap_or(ProgressStyle::default_bar())
-            .progress_chars("#>-"),
-    );
-
-    // Start the progress bar
-    pb_copy.set_message("Copying files");
-
-    // Wrap the progress bar to handle parallel iterations
-    let pb_copy = Arc::new(pb_copy);
-
-    // Start a thread to handle the progress bar
-    let pb_copy_clone = Arc::clone(&pb_copy);
-    let ticker = thread::spawn(move || {
-        while !pb_copy_clone.is_finished() {
-            pb_copy_clone.tick();
-            thread::sleep(Duration::from_millis(100));
-        }
-    });
-
-    // Parallel copying
-    dir_content.files.par_iter().for_each(|item| {
-        let pb_copy = Arc::clone(&pb_copy);
-
-        let relative_path = match Path::new(item).strip_prefix(source_path) {
-            Ok(rel_path) => rel_path,
-            Err(_) => {
-                eprintln!("Impossible to determine relative path for {:?}", item);
-                return;
-            }
-        };
-
-        let destination_file = Path::new(destination_path).join(relative_path);
-
-        // Creates the necessary folders in the destination
-        if let Some(parent) = destination_file.parent() {
-            if let Err(_) = create_dir_all(parent) {
-                eprintln!("Unable to create parent folders for {:?}", destination_file);
-                return;
-            }
-        }
-
-        // Make the copy
-        if let Err(e) = copy(item, &destination_file) {
-            eprintln!(
-                "Error copying file {:?} to {:?}: {:?}",
-                item, destination_file, e
-            );
-            return;
-        }
-
-        pb_copy.inc(1);
-    });
-
-    pb_copy.finish_with_message("Source files copied successfully");
-
-    // Wait for the ticker thread to finish
-    ticker.join().unwrap();
+    // Copy files next
+    if let Err(e) = copy_files(source_path, destination_path, &dir_content) {
+        return Err(e);
+    }
 
     Ok(dir_content)
 }
@@ -408,6 +474,22 @@ enum Commands {
             long,
             default_value = "false",
             value_parser = builder::BoolValueParser::new(),
+            help = "Also copy the target path if it is a folder"
+        )]
+        copy_target: bool,
+
+        #[arg(
+            long,
+            default_value = "false",
+            value_parser = builder::BoolValueParser::new(),
+            help = "Only copy folders, not files"
+        )]
+        only_folders: bool,
+
+        #[arg(
+            long,
+            default_value = "false",
+            value_parser = builder::BoolValueParser::new(),
             help = "Disable the verification of destination files after copying"
         )]
         no_verify: bool,
@@ -427,16 +509,18 @@ fn main() {
                     complete,
                     update,
                 },
+            copy_target,
+            only_folders,
             no_verify,
         } => {
             let option = match (replace, complete, update) {
-                (true, false, false) => CopyPossiblesOptions::Replace,
-                (false, true, false) => CopyPossiblesOptions::Complete,
-                (false, false, true) => CopyPossiblesOptions::Update,
-                _ => CopyPossiblesOptions::None,
+                (true, false, false) => CopyTypesOptions::Replace,
+                (false, true, false) => CopyTypesOptions::Complete,
+                (false, false, true) => CopyTypesOptions::Update,
+                _ => CopyTypesOptions::None,
             };
 
-            let copied_result = do_copy(&source, &destination, option);
+            let copied_result = do_copy(&source, &destination, option, copy_target, only_folders);
 
             if !no_verify && copied_result.is_ok() {
                 let dir_content = match copied_result {

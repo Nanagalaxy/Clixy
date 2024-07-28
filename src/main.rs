@@ -3,7 +3,7 @@ use fs_extra::dir::{get_dir_content, CopyOptions, DirContent};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
-use std::fs::{copy, create_dir, create_dir_all, read_dir, File};
+use std::fs::{copy, create_dir_all, read_dir, File};
 use std::io::{Error, ErrorKind, Read, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -34,8 +34,8 @@ fn check_accessibility(path: &Path) -> Result<()> {
 }
 
 fn copy_directories(
-    source_path: &str,
-    destination_path: &str,
+    source_path: &Path,
+    destination_path: &Path,
     dir_content: &DirContent,
 ) -> Result<()> {
     let m = MultiProgress::new();
@@ -71,7 +71,7 @@ fn copy_directories(
             }
         };
 
-        let destination_dir = Path::new(destination_path).join(relative_path);
+        let destination_dir = destination_path.join(relative_path);
 
         if let Err(e) = create_dir_all(&destination_dir) {
             eprintln!("Unable to create directory {:?}: {:?}", destination_dir, e);
@@ -88,7 +88,7 @@ fn copy_directories(
     Ok(())
 }
 
-fn copy_files(source_path: &str, destination_path: &str, dir_content: &DirContent) -> Result<()> {
+fn copy_files(source_path: &Path, destination_path: &Path, dir_content: &DirContent) -> Result<()> {
     let m = MultiProgress::new();
 
     let pb_copy = m.add(ProgressBar::new(dir_content.files.len() as u64));
@@ -121,7 +121,7 @@ fn copy_files(source_path: &str, destination_path: &str, dir_content: &DirConten
             }
         };
 
-        let destination_file = Path::new(destination_path).join(relative_path);
+        let destination_file = destination_path.join(relative_path);
 
         if let Err(e) = copy(item, &destination_file) {
             eprintln!(
@@ -150,10 +150,9 @@ enum CopyTypesOptions {
 }
 
 fn do_copy(
-    source_path: &str,
-    destination_path: &str,
+    source_path: &Path,
+    destination_path: &Path,
     option: CopyTypesOptions,
-    copy_target: bool,
     only_folders: bool,
 ) -> Result<DirContent> {
     let m = MultiProgress::new();
@@ -216,8 +215,8 @@ fn do_copy(
     ticker.join().unwrap();
 
     // Checks that the destination folder is accessible
-    if Path::new(destination_path).exists() {
-        if let Err(_) = check_accessibility(Path::new(destination_path)) {
+    if destination_path.exists() {
+        if let Err(_) = check_accessibility(destination_path) {
             eprintln!("Destination folder not accessible, check the path or permissions");
             return Err(Error::new(
                 ErrorKind::PermissionDenied,
@@ -237,7 +236,7 @@ fn do_copy(
         }
     } else {
         // Creates destination folder if none exists
-        if let Err(_) = create_dir(destination_path) {
+        if let Err(_) = create_dir_all(destination_path) {
             eprintln!("Unable to create destination folder, check the path or permissions");
             return Err(Error::new(
                 ErrorKind::PermissionDenied,
@@ -268,7 +267,7 @@ fn do_copy(
     if option == CopyTypesOptions::Complete {
         dir_content.files.retain(|item| {
             let destination_file =
-                Path::new(destination_path).join(match Path::new(item).strip_prefix(source_path) {
+                destination_path.join(match Path::new(item).strip_prefix(source_path) {
                     Ok(rel_path) => rel_path,
                     Err(_) => {
                         eprintln!("Impossible to determine relative path for {:?}", item);
@@ -282,7 +281,7 @@ fn do_copy(
         // Remove the files in the list that are already in the destination folder and are older than the source files
         dir_content.files.retain(|item| {
             let destination_file =
-                Path::new(destination_path).join(match Path::new(item).strip_prefix(source_path) {
+                destination_path.join(match Path::new(item).strip_prefix(source_path) {
                     Ok(rel_path) => rel_path,
                     Err(_) => {
                         eprintln!("Impossible to determine relative path for {:?}", item);
@@ -325,7 +324,7 @@ fn do_copy(
     Ok(dir_content)
 }
 
-fn verify_copy(source_path: &str, destination_dir_content: DirContent) -> bool {
+fn verify_copy(source_path: &Path, destination_dir_content: DirContent) -> bool {
     // Check if destination_dir_content is empty
     if destination_dir_content.files.is_empty() {
         eprintln!("No destination files to verify");
@@ -364,14 +363,13 @@ fn verify_copy(source_path: &str, destination_dir_content: DirContent) -> bool {
     destination_dir_content.files.par_iter().for_each(|item| {
         let pb_verify = Arc::clone(&pb_verify);
 
-        let source_file =
-            Path::new(source_path).join(match Path::new(item).strip_prefix(source_path) {
-                Ok(rel_path) => rel_path,
-                Err(_) => {
-                    eprintln!("Impossible to determine relative path for {:?}", item);
-                    return;
-                }
-            });
+        let source_file = source_path.join(match Path::new(item).strip_prefix(source_path) {
+            Ok(rel_path) => rel_path,
+            Err(_) => {
+                eprintln!("Impossible to determine relative path for {:?}", item);
+                return;
+            }
+        });
 
         let source_hash = match calculate_hash(&source_file) {
             Ok(hash) => hash,
@@ -502,7 +500,7 @@ fn main() {
     match args.command {
         Commands::Copy {
             source,
-            destination,
+            mut destination,
             options:
                 ArgsCopyPossiblesOptions {
                     replace,
@@ -520,7 +518,32 @@ fn main() {
                 _ => CopyTypesOptions::None,
             };
 
-            let copied_result = do_copy(&source, &destination, option, copy_target, only_folders);
+            let source_path = Path::new(&source);
+            // let destination_path = Path::new(&destination);
+
+            if copy_target && source_path.is_dir() {
+                let source_path_filename = match source_path.file_name() {
+                    Some(filename) => filename,
+                    None => {
+                        eprintln!("Error getting source path filename");
+                        return;
+                    }
+                };
+
+                let temp_destination_path = Path::new(&destination).join(source_path_filename);
+
+                destination = match temp_destination_path.to_str() {
+                    Some(path) => path.to_string(),
+                    None => {
+                        eprintln!("Error getting destination path");
+                        return;
+                    }
+                };
+            }
+
+            let destination_path = Path::new(&destination);
+
+            let copied_result = do_copy(&source_path, &destination_path, option, only_folders);
 
             if !no_verify && copied_result.is_ok() {
                 let dir_content = match copied_result {
@@ -531,7 +554,7 @@ fn main() {
                     }
                 };
 
-                verify_copy(&source, dir_content);
+                verify_copy(&source_path, dir_content);
             }
         }
     }

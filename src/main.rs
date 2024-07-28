@@ -1,5 +1,5 @@
 use clap::{builder, crate_authors, crate_description, crate_version, Args, Parser, Subcommand};
-use fs_extra::dir::{get_dir_content, CopyOptions};
+use fs_extra::dir::{get_dir_content, CopyOptions, DirContent};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
@@ -41,7 +41,11 @@ enum CopyPossiblesOptions {
     Update,
 }
 
-fn do_copy(source_path: &str, destination_path: &str, option: CopyPossiblesOptions) {
+fn do_copy(
+    source_path: &str,
+    destination_path: &str,
+    option: CopyPossiblesOptions,
+) -> Result<DirContent> {
     let m = MultiProgress::new();
 
     // Retrieves the contents of the source folder
@@ -49,51 +53,53 @@ fn do_copy(source_path: &str, destination_path: &str, option: CopyPossiblesOptio
         Ok(content) => content,
         Err(_) => {
             eprintln!("Error reading contents of source folder, the path may not exist");
-            return;
+            return Err(Error::new(ErrorKind::NotFound, "The path doesn't exist"));
         }
     };
 
-    // Create a progress bar for the verification of the source files
-    let pb_verify = m.add(ProgressBar::new(dir_content.files.len() as u64));
-    pb_verify.set_style(
+    // Create a progress bar for the check of the source files
+    let pb_check = m.add(ProgressBar::new(dir_content.files.len() as u64));
+    pb_check.set_style(
         ProgressStyle::default_bar()
             .template("[{elapsed}] [{wide_bar:.cyan/blue}] {pos}/{len} {msg}")
             .unwrap_or(ProgressStyle::default_bar())
             .progress_chars("#>-"),
     );
 
+    // Start the progress bar
+    pb_check.set_message("Checking source files");
+
     // Wrap the progress bar to handle parallel iterations
-    let pb_verify = Arc::new(pb_verify);
+    let pb_check = Arc::new(pb_check);
 
     // Start a thread to handle the progress bar
-    let pb_verify_clone = Arc::clone(&pb_verify);
+    let pb_check_clone = Arc::clone(&pb_check);
     let ticker = thread::spawn(move || {
-        while !pb_verify_clone.is_finished() {
-            pb_verify_clone.tick();
+        while !pb_check_clone.is_finished() {
+            pb_check_clone.tick();
             thread::sleep(Duration::from_millis(100));
         }
     });
 
     // Set a flag if any file is not accessible
-    let verify_error = Arc::new(Mutex::new(false));
+    let check_error = Arc::new(Mutex::new(false));
 
-    // Parallel verification
     dir_content.files.par_iter().for_each(|item| {
-        let pb_verify = Arc::clone(&pb_verify);
+        let pb_check = Arc::clone(&pb_check);
 
         if let Err(_) = check_accessibility(Path::new(item)) {
             eprintln!("Source file {:?} not accessible", item);
-            *verify_error.lock().unwrap() = true;
+            *check_error.lock().unwrap() = true;
         }
 
-        pb_verify.inc(1);
+        pb_check.inc(1);
     });
 
-    if *verify_error.lock().unwrap() {
-        pb_verify.finish_with_message("Error verifying sources files, aborting copy");
-        return;
+    if *check_error.lock().unwrap() {
+        pb_check.finish_with_message("Error checking source files, aborting copy");
+        return Err(Error::new(ErrorKind::Other, "Error checking source files"));
     } else {
-        pb_verify.finish_with_message("Files verified successfully");
+        pb_check.finish_with_message("Source files checked successfully");
     }
 
     // Wait for the ticker thread to finish
@@ -103,21 +109,30 @@ fn do_copy(source_path: &str, destination_path: &str, option: CopyPossiblesOptio
     if Path::new(destination_path).exists() {
         if let Err(_) = check_accessibility(Path::new(destination_path)) {
             eprintln!("Destination folder not accessible, check the path or permissions");
-            return;
+            return Err(Error::new(
+                ErrorKind::PermissionDenied,
+                "Destination folder not accessible",
+            ));
         }
 
         // Checks that the destination folder is empty
         if let Ok(content) = read_dir(destination_path) {
             if option == CopyPossiblesOptions::None && content.count() > 0 {
                 eprintln!("Destination folder is not empty, please provide an empty folder or use an option");
-                return;
+                return Err(Error::new(
+                    ErrorKind::AlreadyExists,
+                    "Destination folder is not empty",
+                ));
             }
         }
     } else {
         // Creates destination folder if none exists
         if let Err(_) = create_dir(destination_path) {
             eprintln!("Unable to create destination folder, check the path or permissions");
-            return;
+            return Err(Error::new(
+                ErrorKind::PermissionDenied,
+                "Unable to create destination folder",
+            ));
         }
     }
 
@@ -187,6 +202,9 @@ fn do_copy(source_path: &str, destination_path: &str, option: CopyPossiblesOptio
             .progress_chars("#>-"),
     );
 
+    // Start the progress bar
+    pb_copy.set_message("Copying files");
+
     // Wrap the progress bar to handle parallel iterations
     let pb_copy = Arc::new(pb_copy);
 
@@ -230,40 +248,100 @@ fn do_copy(source_path: &str, destination_path: &str, option: CopyPossiblesOptio
             return;
         }
 
-        // Checks the hash of the copied file
-        let source_hash = match calculate_hash(&Path::new(item)) {
+        pb_copy.inc(1);
+    });
+
+    pb_copy.finish_with_message("Source files copied successfully");
+
+    // Wait for the ticker thread to finish
+    ticker.join().unwrap();
+
+    Ok(dir_content)
+}
+
+fn verify_copy(source_path: &str, destination_dir_content: DirContent) -> bool {
+    // Check if destination_dir_content is empty
+    if destination_dir_content.files.is_empty() {
+        eprintln!("No destination files to verify");
+        return true;
+    }
+
+    let m = MultiProgress::new();
+
+    // Create a progress bar for the verification of the source files
+    let pb_verify = m.add(ProgressBar::new(destination_dir_content.files.len() as u64));
+    pb_verify.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed}] [{wide_bar:.cyan/blue}] {pos}/{len} {msg}")
+            .unwrap_or(ProgressStyle::default_bar())
+            .progress_chars("#>-"),
+    );
+
+    // Start the progress bar
+    pb_verify.set_message("Verifying destination files");
+
+    // Wrap the progress bar to handle parallel iterations
+    let pb_verify = Arc::new(pb_verify);
+
+    // Start a thread to handle the progress bar
+    let pb_verify_clone = Arc::clone(&pb_verify);
+    let ticker = thread::spawn(move || {
+        while !pb_verify_clone.is_finished() {
+            pb_verify_clone.tick();
+            thread::sleep(Duration::from_millis(100));
+        }
+    });
+
+    // Set a flag if any file is not accessible
+    let verify_error = Arc::new(Mutex::new(false));
+
+    destination_dir_content.files.par_iter().for_each(|item| {
+        let pb_verify = Arc::clone(&pb_verify);
+
+        let source_file =
+            Path::new(source_path).join(match Path::new(item).strip_prefix(source_path) {
+                Ok(rel_path) => rel_path,
+                Err(_) => {
+                    eprintln!("Impossible to determine relative path for {:?}", item);
+                    return;
+                }
+            });
+
+        let source_hash = match calculate_hash(&source_file) {
             Ok(hash) => hash,
             Err(_) => {
-                eprintln!("Error calculating source file hash for {:?}", item);
+                eprintln!("Error calculating hash for source file {:?}", source_file);
                 return;
             }
         };
 
-        let destination_hash = match calculate_hash(&destination_file) {
+        let destination_hash = match calculate_hash(Path::new(item)) {
             Ok(hash) => hash,
             Err(_) => {
-                eprintln!(
-                    "Error calculating destination file hash for {:?}",
-                    destination_file
-                );
+                eprintln!("Error calculating hash for destination file {:?}", item);
                 return;
             }
         };
 
         if source_hash != destination_hash {
-            eprintln!(
-                "Hashes do not match for the files {:?} and {:?}",
-                item, destination_file
-            );
+            eprintln!("File {:?} is different from the source", item);
+            *verify_error.lock().unwrap() = true;
         }
 
-        pb_copy.inc(1);
+        pb_verify.inc(1);
     });
 
-    pb_copy.finish_with_message("Files copied successfully");
+    if *verify_error.lock().unwrap() {
+        pb_verify.finish_with_message("Error verifying destination files");
+    } else {
+        pb_verify.finish_with_message("Destination files verified successfully");
+    }
 
     // Wait for the ticker thread to finish
     ticker.join().unwrap();
+
+    let res = !*verify_error.lock().unwrap();
+    res
 }
 
 #[derive(Parser)]
@@ -325,6 +403,14 @@ enum Commands {
 
         #[clap(flatten)]
         options: ArgsCopyPossiblesOptions,
+
+        #[arg(
+            long,
+            default_value = "false",
+            value_parser = builder::BoolValueParser::new(),
+            help = "Disable the verification of destination files after copying"
+        )]
+        no_verify: bool,
     },
 }
 
@@ -341,6 +427,7 @@ fn main() {
                     complete,
                     update,
                 },
+            no_verify,
         } => {
             let option = match (replace, complete, update) {
                 (true, false, false) => CopyPossiblesOptions::Replace,
@@ -349,7 +436,19 @@ fn main() {
                 _ => CopyPossiblesOptions::None,
             };
 
-            do_copy(&source, &destination, option);
+            let copied_result = do_copy(&source, &destination, option);
+
+            if !no_verify && copied_result.is_ok() {
+                let dir_content = match copied_result {
+                    Ok(content) => content,
+                    Err(_) => {
+                        eprintln!("Error copying source files, cannot verify");
+                        return;
+                    }
+                };
+
+                verify_copy(&source, dir_content);
+            }
         }
     }
 }

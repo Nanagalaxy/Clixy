@@ -1,14 +1,16 @@
-use crate::commands::utils::{calculate_hash, check_accessibility};
-use clap::{builder, Args};
-use fs_extra::dir::{get_dir_content, CopyOptions, DirContent};
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use rayon::prelude::*;
 use std::fs::{copy, create_dir_all, read_dir, File};
 use std::io::{Error, ErrorKind, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+
+use clap::{builder, Args};
+use fs_extra::dir::{get_dir_content, CopyOptions, DirContent};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use rayon::prelude::*;
+
+use super::utils::{calculate_hash, check_accessibility};
 
 #[derive(PartialEq)]
 pub enum CopyTypesOptions {

@@ -10,7 +10,7 @@ use fs_extra::dir::{get_dir_content, CopyOptions, DirContent};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 
-use super::utils::{calculate_hash, check_accessibility};
+use super::utils::{calculate_hash, check_permissions};
 
 #[derive(PartialEq)]
 pub enum CopyTypesOptions {
@@ -175,9 +175,17 @@ fn do_copy(
     dir_content.files.par_iter().for_each(|item| {
         let pb_check = Arc::clone(&pb_check);
 
-        if let Err(_) = check_accessibility(Path::new(item)) {
-            eprintln!("Source file {:?} not accessible", item);
-            *check_error.lock().unwrap() = true;
+        match check_permissions(source_path, false) {
+            Ok(permissions) => {
+                if !permissions.read {
+                    eprintln!("Source file {:?} not readable", item);
+                    *check_error.lock().unwrap() = true;
+                }
+            }
+            Err(_) => {
+                eprintln!("Error checking source file permissions for {:?}", item);
+                *check_error.lock().unwrap() = true;
+            }
         }
 
         pb_check.inc(1);
@@ -195,12 +203,29 @@ fn do_copy(
 
     // Checks that the destination folder is accessible
     if destination_path.exists() {
-        if let Err(_) = check_accessibility(destination_path) {
-            eprintln!("Destination folder not accessible, check the path or permissions");
-            return Err(Error::new(
-                ErrorKind::PermissionDenied,
-                "Destination folder not accessible",
-            ));
+        match check_permissions(destination_path, true) {
+            Ok(permissions) => {
+                if !permissions.read {
+                    eprintln!("Destination folder not readable");
+                    return Err(Error::new(
+                        ErrorKind::PermissionDenied,
+                        "Destination folder not readable",
+                    ));
+                } else if !permissions.write {
+                    eprintln!("Destination folder not writable");
+                    return Err(Error::new(
+                        ErrorKind::PermissionDenied,
+                        "Destination folder not writable",
+                    ));
+                }
+            }
+            Err(_) => {
+                eprintln!("Error checking destination folder permissions");
+                return Err(Error::new(
+                    ErrorKind::PermissionDenied,
+                    "Error checking destination folder permissions",
+                ));
+            }
         }
 
         // Checks that the destination folder is empty

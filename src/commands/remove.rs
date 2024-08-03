@@ -13,7 +13,7 @@ use fs_extra::dir::{get_dir_content, DirContent};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-use super::utils::check_accessibility;
+use super::utils::check_permissions;
 
 #[derive(Args, Clone)]
 pub struct RemoveCommand {
@@ -89,9 +89,20 @@ fn do_remove(source_path: &Path, only_files: bool) -> bool {
     dir_content.files.par_iter().for_each(|item| {
         let pb_check = Arc::clone(&pb_check);
 
-        if let Err(_) = check_accessibility(Path::new(item)) {
-            eprintln!("Source file {:?} not accessible", item);
-            *check_error.lock().unwrap() = true;
+        match check_permissions(Path::new(item), true) {
+            Ok(permissions) => {
+                if !permissions.read {
+                    eprintln!("Source file {:?} not readable", item);
+                    *check_error.lock().unwrap() = true;
+                } else if !permissions.write {
+                    eprintln!("Source file {:?} not writable", item);
+                    *check_error.lock().unwrap() = true;
+                }
+            }
+            Err(_) => {
+                eprintln!("Source file {:?} not accessible", item);
+                *check_error.lock().unwrap() = true;
+            }
         }
 
         pb_check.inc(1);

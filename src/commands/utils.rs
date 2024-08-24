@@ -107,3 +107,35 @@ pub fn check_permissions(path: &Path, test_write: bool) -> Result<AllowedPermiss
         write: write_permission,
     })
 }
+
+/// Function to confirm if the user wants to continue with the operation
+/// Returns true if the user confirms, false otherwise
+/// Defaults to false if the user doesn't input anything
+pub fn confirm_continue() -> bool {
+    println!("Do you want to continue? (y/N)");
+
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input).unwrap_or_default();
+
+    input.trim().to_lowercase() == "y"
+}
+
+/// Function to round the size of a file or folder to a human-readable format
+pub fn round_bytes_size(size: u64) -> String {
+    let kb = 1024;
+    let mb = kb * 1024;
+    let gb = mb * 1024;
+    let tb = gb * 1024;
+
+    if size < kb {
+        format!("{} B", size)
+    } else if size < mb {
+        format!("{:.2} KB", size as f64 / kb as f64)
+    } else if size < gb {
+        format!("{:.2} MB", size as f64 / mb as f64)
+    } else if size < tb {
+        format!("{:.2} GB", size as f64 / gb as f64)
+    } else {
+        format!("{:.2} TB", size as f64 / tb as f64)
+    }
+}

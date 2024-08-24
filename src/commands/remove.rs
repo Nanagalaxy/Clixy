@@ -13,6 +13,8 @@ use fs_extra::dir::{get_dir_content, DirContent};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
+use crate::commands::utils::{confirm_continue, round_bytes_size};
+
 use super::utils::check_permissions;
 
 #[derive(Args, Clone)]
@@ -33,14 +35,27 @@ pub struct RemoveCommand {
         help = "Only remove files, not directories"
     )]
     only_files: bool,
+
+    #[arg(
+        short,
+        long,
+        default_value = "false",
+        value_parser = builder::BoolValueParser::new(),
+        help = "Confirm the remove operation before proceeding"
+    )]
+    yes: bool,
 }
 
 pub fn execute_remove(cmd: RemoveCommand) {
-    let RemoveCommand { source, only_files } = cmd;
+    let RemoveCommand {
+        source,
+        only_files,
+        yes,
+    } = cmd;
 
     let source_path = Path::new(&source);
 
-    let remove_result = do_remove(source_path, only_files);
+    let remove_result = do_remove(source_path, only_files, yes);
 
     if remove_result {
         println!("Successfully removed {}", source);
@@ -49,7 +64,7 @@ pub fn execute_remove(cmd: RemoveCommand) {
     }
 }
 
-fn do_remove(source_path: &Path, only_files: bool) -> bool {
+fn do_remove(source_path: &Path, only_files: bool, prompt_confirm: bool) -> bool {
     let m = MultiProgress::new();
 
     let dir_content = match get_dir_content(source_path) {
@@ -59,6 +74,21 @@ fn do_remove(source_path: &Path, only_files: bool) -> bool {
             return false;
         }
     };
+
+    if !prompt_confirm {
+        println!(
+            "Removing {} files and {} directories from {} ({})",
+            dir_content.files.len(),
+            dir_content.directories.len(),
+            source_path.display(),
+            round_bytes_size(dir_content.dir_size)
+        );
+
+        if !confirm_continue() {
+            println!("Aborting remove");
+            return false;
+        }
+    }
 
     let pb_check = m.add(ProgressBar::new(dir_content.files.len() as u64));
     pb_check.set_style(

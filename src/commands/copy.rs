@@ -10,6 +10,8 @@ use fs_extra::dir::{get_dir_content, CopyOptions, DirContent};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 
+use crate::content_tree::Tree;
+
 use super::utils::{calculate_hash, check_permissions};
 
 #[derive(PartialEq)]
@@ -534,6 +536,17 @@ pub fn execute_copy(cmd: CopyCommand) {
 
     let destination_path = Path::new(&destination);
 
+    let mut tree = match Tree::new(source_path, destination_path) {
+        Some(tree) => tree,
+        None => {
+            eprintln!("Error processing source and destination paths, aborting copy");
+            return;
+        }
+    };
+
+    tree.copy(false).unwrap();
+
+    /*
     let copied_result = do_copy(&source_path, &destination_path, option, only_folders);
 
     if !no_verify && copied_result.is_ok() {
@@ -547,4 +560,5 @@ pub fn execute_copy(cmd: CopyCommand) {
 
         verify_copy(&source_path, dir_content);
     }
+    */
 }

@@ -1,4 +1,5 @@
 mod commands;
+mod content_tree;
 
 use clap::{crate_authors, crate_description, crate_version, Parser, Subcommand};
 

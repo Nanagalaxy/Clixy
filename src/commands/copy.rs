@@ -10,7 +10,7 @@ use fs_extra::dir::{get_dir_content, CopyOptions, DirContent};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 
-use crate::content_tree::Tree;
+use crate::content_tree::{Copyable, Tree};
 
 use super::utils::{calculate_hash, check_permissions};
 

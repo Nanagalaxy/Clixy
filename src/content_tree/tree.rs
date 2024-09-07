@@ -1,5 +1,4 @@
 use fs4::fs_std::FileExt;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     fs::File,
     io::Result,
@@ -7,12 +6,12 @@ use std::{
 };
 
 /// A file node in the tree.
-struct FileNode {
+pub struct FileNode {
     /// The file name without the extension
     name: String,
 
     /// The file handle
-    handle: File,
+    pub handle: File,
 
     /// The file extension
     extension: String,
@@ -53,12 +52,12 @@ impl FileNode {
 }
 
 /// A folder node in the tree.
-struct FolderNode {
+pub struct FolderNode {
     /// The folder name
     name: String,
 
     /// The children nodes (files or folders)
-    children: Vec<Node>,
+    pub children: Vec<Node>,
 }
 
 impl FolderNode {
@@ -100,7 +99,7 @@ impl FolderNode {
 }
 
 /// A node in the tree. This can be a file or a folder.
-enum Node {
+pub enum Node {
     File(FileNode),
     Folder(FolderNode),
 }
@@ -139,7 +138,7 @@ impl Node {
     }
 
     /// Lock a file node or all children nodes of a folder node.
-    fn lock(&mut self) -> Result<()> {
+    pub fn lock(&mut self) -> Result<()> {
         match self {
             Node::File(file) => file.lock(),
             Node::Folder(folder) => folder.lock(),
@@ -147,132 +146,27 @@ impl Node {
     }
 
     /// Unlock a file node or all children nodes of a folder node.
-    fn unlock(&mut self) -> Result<()> {
+    pub fn unlock(&mut self) -> Result<()> {
         match self {
             Node::File(file) => file.unlock(),
             Node::Folder(folder) => folder.unlock(),
         }
     }
 
-    fn get_full_path(&self, parent_path: &Path) -> PathBuf {
+    pub fn get_full_path(&self, parent_path: &Path) -> PathBuf {
         match self {
             Node::File(file) => parent_path.join(format!("{}.{}", file.name, file.extension)),
             Node::Folder(folder) => parent_path.join(&folder.name),
         }
     }
-
-    /// Prepare the stack for the content of the tree.
-    /// This will create the destination directory structure and add the file nodes to the stack.
-    fn prepare_stack(&self, destination: &Path, into: bool) -> Result<Vec<(&FileNode, PathBuf)>> {
-        // This stack will hold the nodes to be processed
-        let mut stack = if into {
-            // Stack is initialized with the current node and the destination path
-            vec![(self, destination.to_path_buf())]
-        } else {
-            // Stack is initialized with the children nodes and their destination path of the current node
-            match self {
-                Node::Folder(folder) => folder
-                    .children
-                    .par_iter()
-                    .map(|child| (child, destination.to_path_buf()))
-                    .collect(),
-                _ => vec![],
-            }
-        };
-
-        // This stack will hold the file nodes and their destination path
-        let mut files_stack = Vec::new();
-
-        while let Some((node, dest_path)) = stack.pop() {
-            let full_path = node.get_full_path(&dest_path);
-
-            match node {
-                Node::File(file_node) => {
-                    files_stack.push((file_node, full_path));
-                }
-                Node::Folder(folder) => {
-                    std::fs::create_dir_all(&full_path)?;
-
-                    for child in &folder.children {
-                        stack.push((child, full_path.clone()));
-                    }
-                }
-            }
-        }
-
-        Ok(files_stack)
-    }
-
-    fn copy_mono(&self, destination: &Path, into: bool) -> Result<()> {
-        let mut stack = if into {
-            // Stack is initialized with the current node and the destination path
-            vec![(self, destination.to_path_buf())]
-        } else {
-            // Stack is initialized with the children nodes and their destination path of the current node
-            match self {
-                Node::Folder(folder) => folder
-                    .children
-                    .iter()
-                    .map(|child| (child, destination.to_path_buf()))
-                    .collect(),
-                _ => vec![],
-            }
-        };
-
-        while let Some((node, dest_path)) = stack.pop() {
-            let full_path = node.get_full_path(&dest_path);
-
-            match node {
-                Node::File(file) => {
-                    let mut dest_file = File::create(&full_path)?;
-                    std::io::copy(&mut &file.handle, &mut dest_file)?;
-                }
-                Node::Folder(folder) => {
-                    std::fs::create_dir_all(&full_path)?;
-
-                    for child in &folder.children {
-                        stack.push((child, full_path.clone()));
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn copy(&self, destination: &Path, into: bool) -> Result<()> {
-        let files_stack = self.prepare_stack(destination, into)?;
-
-        files_stack.par_iter().for_each(|(file_node, full_path)| {
-            let mut dest_file = match File::create(full_path) {
-                Ok(file) => file,
-                Err(_) => {
-                    // TODO: handle errors (info) here
-                    return;
-                }
-            };
-
-            match std::io::copy(&mut &file_node.handle, &mut dest_file) {
-                Ok(_) => {
-                    // TODO: update progress bar here
-                }
-                Err(_) => {
-                    // TODO: handle errors (info) here
-                    return;
-                }
-            };
-        });
-
-        Ok(())
-    }
 }
 
 /// Struct to hold a tree of files and folders
 pub struct Tree {
-    src_root: Node,
+    pub src_root: Node,
 
     /// The path of the destination root node
-    dest_root_path: PathBuf,
+    pub dest_root_path: PathBuf,
 }
 
 impl Tree {
@@ -284,17 +178,5 @@ impl Tree {
             src_root: source_root,
             dest_root_path: destination_root_path.to_path_buf(),
         })
-    }
-
-    /// Copy the content of the source path to the destination path.
-    /// If `into` is `true`, the source path will be copied directly into the destination path.
-    pub fn copy(&mut self, into: bool) -> Result<()> {
-        self.src_root.lock()?;
-
-        let result = Node::copy(&self.src_root, &self.dest_root_path, into);
-
-        self.src_root.unlock()?;
-
-        result
     }
 }

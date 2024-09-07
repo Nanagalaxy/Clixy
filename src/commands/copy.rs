@@ -493,7 +493,7 @@ pub struct CopyCommand {
 pub fn execute_copy(cmd: CopyCommand) {
     let CopyCommand {
         source,
-        mut destination,
+        destination,
         options:
             ArgsCopyPossiblesOptions {
                 replace,
@@ -513,27 +513,6 @@ pub fn execute_copy(cmd: CopyCommand) {
     };
 
     let source_path = Path::new(&source);
-
-    if copy_target && source_path.is_dir() {
-        let source_path_filename = match source_path.file_name() {
-            Some(filename) => filename,
-            None => {
-                eprintln!("Error getting source path filename");
-                return;
-            }
-        };
-
-        let temp_destination_path = Path::new(&destination).join(source_path_filename);
-
-        destination = match temp_destination_path.to_str() {
-            Some(path) => path.to_string(),
-            None => {
-                eprintln!("Error getting destination path");
-                return;
-            }
-        };
-    }
-
     let destination_path = Path::new(&destination);
 
     let mut tree = match Tree::new(source_path, destination_path) {
@@ -544,7 +523,7 @@ pub fn execute_copy(cmd: CopyCommand) {
         }
     };
 
-    tree.copy(false).unwrap();
+    tree.copy(copy_target).unwrap();
 
     /*
     let copied_result = do_copy(&source_path, &destination_path, option, only_folders);

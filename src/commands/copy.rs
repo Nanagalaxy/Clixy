@@ -523,7 +523,7 @@ pub fn execute_copy(cmd: CopyCommand) {
         }
     };
 
-    tree.copy(copy_target).unwrap();
+    tree.copy(copy_target, option, only_folders).unwrap();
 
     /*
     let copied_result = do_copy(&source_path, &destination_path, option, only_folders);

@@ -526,7 +526,7 @@ pub fn execute_copy(cmd: CopyCommand) {
     let copied_result = tree.copy(copy_target, option, only_folders);
 
     if !no_verify && copied_result.is_ok() {
-        match tree.verify(copy_target) {
+        match tree.verify(copy_target, copied_result.unwrap()) {
             Ok(_) => {
                 println!("Copy and verification completed successfully");
             }

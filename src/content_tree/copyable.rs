@@ -5,17 +5,29 @@ use std::{
     fs::OpenOptions,
     io::{Error, ErrorKind, Result},
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 
 /// Add functionality to copy the content of a tree.
 pub trait Copyable {
-    fn copy(&mut self, into: bool, option: CopyTypesOptions, only_folders: bool) -> Result<()>;
+    fn copy(
+        &mut self,
+        into: bool,
+        option: CopyTypesOptions,
+        only_folders: bool,
+    ) -> Result<Vec<PathBuf>>;
 }
 
 impl Copyable for Tree {
     /// Copy the content of the source path to the destination path.
     /// If `into` is `true`, the source path will be copied directly into the destination path.
-    fn copy(&mut self, into: bool, option: CopyTypesOptions, only_folders: bool) -> Result<()> {
+    /// Returns a vector with the destination paths of the copied files.
+    fn copy(
+        &mut self,
+        into: bool,
+        option: CopyTypesOptions,
+        only_folders: bool,
+    ) -> Result<Vec<PathBuf>> {
         // Check if the destination path is empty if none option is set
         if option == CopyTypesOptions::None {
             let is_empty = !self.dest_root_path.exists()
@@ -139,14 +151,16 @@ impl Node {
         into: bool,
         only_folders: bool,
         option: CopyTypesOptions,
-    ) -> Result<()> {
+    ) -> Result<Vec<PathBuf>> {
         let files_stack = self.prepare_stack(destination, into)?;
 
         // Return early if we only want to copy folders and not files
         if only_folders {
             // XXX: files_stack are not used in this case, maybe we can avoid creating it in the first place
-            return Ok(());
+            return Ok(vec![]);
         }
+
+        let copied_files: Arc<Mutex<Vec<PathBuf>>> = Arc::new(Mutex::new(Vec::new()));
 
         files_stack.par_iter().for_each(|(file_node, full_path)| {
             let mut open_options = OpenOptions::new();
@@ -175,6 +189,13 @@ impl Node {
                 match std::io::copy(&mut &file_node.handle, &mut dest_file) {
                     Ok(_) => {
                         // TODO: update progress bar here
+                        match copied_files.lock() {
+                            Ok(mut copied_files) => copied_files.push(full_path.clone()),
+                            Err(_) => {
+                                // TODO: handle errors (info) here
+                                return;
+                            }
+                        }
                     }
                     Err(_) => {
                         // TODO: handle errors (info) here
@@ -186,6 +207,14 @@ impl Node {
             }
         });
 
-        Ok(())
+        let copied_files = match Arc::into_inner(copied_files) {
+            Some(copied_files) => copied_files.into_inner().unwrap_or(Vec::new()),
+            None => {
+                eprintln!("Error getting copied files");
+                return Err(Error::new(ErrorKind::Other, "Error getting copied files"));
+            }
+        };
+
+        Ok(copied_files)
     }
 }

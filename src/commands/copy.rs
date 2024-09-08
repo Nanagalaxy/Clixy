@@ -10,7 +10,7 @@ use fs_extra::dir::{get_dir_content, CopyOptions, DirContent};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 
-use crate::content_tree::{Copyable, Tree};
+use crate::content_tree::{Copyable, Tree, Verifyable};
 
 use super::utils::{calculate_hash, check_permissions};
 
@@ -523,7 +523,18 @@ pub fn execute_copy(cmd: CopyCommand) {
         }
     };
 
-    tree.copy(copy_target, option, only_folders).unwrap();
+    let copied_result = tree.copy(copy_target, option, only_folders);
+
+    if !no_verify && copied_result.is_ok() {
+        match tree.verify(copy_target) {
+            Ok(_) => {
+                println!("Copy and verification completed successfully");
+            }
+            Err(_) => {
+                eprintln!("Error verifying destination files");
+            }
+        }
+    }
 
     /*
     let copied_result = do_copy(&source_path, &destination_path, option, only_folders);

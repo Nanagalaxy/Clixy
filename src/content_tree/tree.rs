@@ -165,6 +165,9 @@ impl Node {
 pub struct Tree {
     pub src_root: Node,
 
+    /// The path of the source root node
+    pub src_root_path: PathBuf,
+
     /// The path of the destination root node
     pub dest_root_path: PathBuf,
 }
@@ -176,6 +179,7 @@ impl Tree {
 
         Some(Self {
             src_root: source_root,
+            src_root_path: source_root_path.to_path_buf(),
             dest_root_path: destination_root_path.to_path_buf(),
         })
     }

@@ -1,5 +1,5 @@
 use super::{FileNode, Node, Tree};
-use crate::commands::copy::CopyTypesOptions;
+use crate::{commands::copy::CopyTypesOptions, progress_bar_helper::ProgressBarHelper};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     fs::OpenOptions,
@@ -63,7 +63,12 @@ impl Copyable for Tree {
 impl Node {
     /// Prepare the stack for the content of the tree.
     /// This will create the destination directory structure and add the file nodes to the stack.
-    fn prepare_stack(&self, destination: &Path, into: bool) -> Result<Vec<(&FileNode, PathBuf)>> {
+    fn prepare_stack(
+        &self,
+        destination: &Path,
+        into: bool,
+        option: &CopyTypesOptions,
+    ) -> Result<Vec<(&FileNode, PathBuf, OpenOptions)>> {
         // This stack will hold the nodes to be processed
         let mut stack = if into {
             // Stack is initialized with the current node and the destination path
@@ -83,19 +88,37 @@ impl Node {
         // This stack will hold the file nodes and their destination path
         let mut files_stack = Vec::new();
 
+        // TODO: need to parallelize this loop
         while let Some((node, dest_path)) = stack.pop() {
             let full_path = node.get_full_path(&dest_path);
 
             match node {
                 Node::File(file_node) => {
-                    files_stack.push((file_node, full_path));
+                    let mut open_options = OpenOptions::new();
+                    let push_files = match Node::handle_copy_option(
+                        &file_node,
+                        &full_path,
+                        &option,
+                        &mut open_options,
+                    ) {
+                        Ok(push_files) => push_files,
+                        Err(_) => false,
+                    };
+
+                    if push_files {
+                        files_stack.push((file_node, full_path, open_options));
+                    }
                 }
                 Node::Folder(folder) => {
                     std::fs::create_dir_all(&full_path)?;
 
-                    for child in &folder.children {
-                        stack.push((child, full_path.clone()));
-                    }
+                    stack.extend(
+                        folder
+                            .children
+                            .par_iter()
+                            .map(|child| (child, full_path.clone()))
+                            .collect::<Vec<(&Node, PathBuf)>>(),
+                    );
                 }
             }
         }
@@ -152,7 +175,7 @@ impl Node {
         only_folders: bool,
         option: CopyTypesOptions,
     ) -> Result<Vec<PathBuf>> {
-        let files_stack = self.prepare_stack(destination, into)?;
+        let files_stack = self.prepare_stack(destination, into, &option)?;
 
         // Return early if we only want to copy folders and not files
         if only_folders {
@@ -160,24 +183,15 @@ impl Node {
             return Ok(vec![]);
         }
 
+        let pb_copy = ProgressBarHelper::new(files_stack.len() as u64);
+
+        pb_copy.set_message("Copying files");
+
         let copied_files: Arc<Mutex<Vec<PathBuf>>> = Arc::new(Mutex::new(Vec::new()));
 
-        files_stack.par_iter().for_each(|(file_node, full_path)| {
-            let mut open_options = OpenOptions::new();
-            let do_copy = match Node::handle_copy_option(
-                &file_node,
-                &full_path,
-                &option,
-                &mut open_options,
-            ) {
-                Ok(do_copy) => do_copy,
-                Err(_) => {
-                    // TODO: handle errors (info) here
-                    return;
-                }
-            };
-
-            if do_copy {
+        files_stack
+            .par_iter()
+            .for_each(|(file_node, full_path, open_options)| {
                 let mut dest_file = match open_options.open(full_path) {
                     Ok(file) => file,
                     Err(_) => {
@@ -188,7 +202,6 @@ impl Node {
 
                 match std::io::copy(&mut &file_node.handle, &mut dest_file) {
                     Ok(_) => {
-                        // TODO: update progress bar here
                         match copied_files.lock() {
                             Ok(mut copied_files) => copied_files.push(full_path.clone()),
                             Err(_) => {
@@ -196,21 +209,21 @@ impl Node {
                                 return;
                             }
                         }
+
+                        pb_copy.inc(1);
                     }
                     Err(_) => {
                         // TODO: handle errors (info) here
                         return;
                     }
                 };
-            } else {
-                // TODO: update progress bar here
-            }
-        });
+            });
+
+        pb_copy.finish_with_message("Files copied");
 
         let copied_files = match Arc::into_inner(copied_files) {
             Some(copied_files) => copied_files.into_inner().unwrap_or(Vec::new()),
             None => {
-                eprintln!("Error getting copied files");
                 return Err(Error::new(ErrorKind::Other, "Error getting copied files"));
             }
         };

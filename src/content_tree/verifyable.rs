@@ -1,3 +1,5 @@
+use crate::progress_bar_helper::ProgressBarHelper;
+
 use super::{Node, Tree};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use sha2::{Digest, Sha256};
@@ -76,6 +78,10 @@ impl Node {
             }
         }
 
+        let pb_verify = ProgressBarHelper::new(files_stack.len() as u64);
+
+        pb_verify.set_message("Verifying files");
+
         files_stack
             .par_iter()
             .for_each(|(file_node, src_full_path, dest_full_path)| {
@@ -133,10 +139,11 @@ impl Node {
                     println!("Hash mismatch: {:?} -> {:?}", src_full_path, dest_full_path);
                     return;
                 } else {
-                    // TODO: update progress bar here
-                    println!("Hash match: {:?} -> {:?}", src_full_path, dest_full_path);
+                    pb_verify.inc(1);
                 }
             });
+
+        pb_verify.finish_with_message("Files verified");
 
         Ok(())
     }

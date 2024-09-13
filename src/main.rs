@@ -1,5 +1,6 @@
 mod commands;
 mod content_tree;
+mod progress_bar_helper;
 
 use clap::{crate_authors, crate_description, crate_version, Parser, Subcommand};
 

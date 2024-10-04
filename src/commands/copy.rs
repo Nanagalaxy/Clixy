@@ -22,7 +22,7 @@ struct ArgsCopyPossiblesOptions {
         long,
         default_value = "false",
         value_parser = builder::BoolValueParser::new(),
-        help = "Option for the copy. Replace the destination path and its contents if it exists. Cannot be used with any other option"
+        help = "Replace the destination path and its contents if they already exist. Cannot be used with --complete or --update."
     )]
     replace: bool,
 
@@ -30,7 +30,7 @@ struct ArgsCopyPossiblesOptions {
         long,
         default_value = "false",
         value_parser = builder::BoolValueParser::new(),
-        help = "Option for the copy. Only copy files that are not already in the destination folder Cannot be used with any other option"
+        help = "Only copy files that do not exist in the destination folder. Cannot be used with --replace or --update."
     )]
     complete: bool,
 
@@ -38,7 +38,7 @@ struct ArgsCopyPossiblesOptions {
         long,
         default_value = "false",
         value_parser = builder::BoolValueParser::new(),
-        help = "Option for the copy. Update the destination files if they are older than the source files Cannot be used with any other option"
+        help = "Update destination files only if they are older than the source files. Cannot be used with --replace or --complete."
     )]
     update: bool,
 }
@@ -50,7 +50,7 @@ pub struct CopyCommand {
         long,
         required = true,
         value_parser = builder::NonEmptyStringValueParser::new(),
-        help = "The source path to copy"
+        help = "The source path to copy from."
     )]
     source: String,
 
@@ -59,7 +59,7 @@ pub struct CopyCommand {
         long,
         required = true,
         value_parser = builder::NonEmptyStringValueParser::new(),
-        help = "The destination path to copy to. Will be created if it doesn't exist"
+        help = "The destination path to copy to. This will be created if it doesn't exist."
     )]
     destination: String,
 
@@ -70,7 +70,7 @@ pub struct CopyCommand {
         long,
         default_value = "false",
         value_parser = builder::BoolValueParser::new(),
-        help = "Also copy the target path if it is a folder"
+        help = "If the source is a folder, copy the folder itself to the destination"
     )]
     copy_target: bool,
 
@@ -78,7 +78,7 @@ pub struct CopyCommand {
         long,
         default_value = "false",
         value_parser = builder::BoolValueParser::new(),
-        help = "Only copy folders, not files"
+        help = "Copy only folders, skipping all files."
     )]
     only_folders: bool,
 
@@ -86,7 +86,7 @@ pub struct CopyCommand {
         long,
         default_value = "false",
         value_parser = builder::BoolValueParser::new(),
-        help = "Disable the verification of destination files after copying"
+        help = "Skip verification of files after copying them to the destination."
     )]
     no_verify: bool,
 
@@ -94,7 +94,7 @@ pub struct CopyCommand {
         long,
         default_value = "10",
         value_parser = builder::RangedU64ValueParser::<usize>::new(),
-        help = "Set the number of worker threads (value must be greater than 0)"
+        help = "Set the number of worker threads to use. Must be greater than 0."
     )]
     workers: usize,
 }

@@ -4,6 +4,17 @@ use sha2::{Digest, Sha256};
 use std::fs::{read_dir, File};
 use std::io::{Error, ErrorKind, Read, Result};
 use std::path::Path;
+use std::sync::{Arc, Mutex};
+
+/// Function to add an error to a list of errors
+pub fn add_error(list_of_errors: &Arc<Mutex<Vec<String>>>, error: String) {
+    match list_of_errors.lock() {
+        Ok(mut errors) => errors.push(error),
+        Err(_) => {
+            // TODO: What to do here?
+        }
+    }
+}
 
 /// Function for calculating the SHA-256 hash of a file
 pub fn calculate_hash(file_path: &Path) -> Result<Vec<u8>> {

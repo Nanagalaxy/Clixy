@@ -1,3 +1,8 @@
+use crate::utils::{check_permissions, confirm_continue, round_bytes_size};
+use clap::{builder, Args};
+use fs_extra::dir::{get_dir_content, DirContent};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs::remove_dir;
 use std::io::{Error, ErrorKind, Result};
 use std::{
@@ -7,15 +12,6 @@ use std::{
     thread,
     time::Duration,
 };
-
-use clap::{builder, Args};
-use fs_extra::dir::{get_dir_content, DirContent};
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-
-use crate::commands::utils::{confirm_continue, round_bytes_size};
-
-use super::utils::check_permissions;
 
 #[derive(Args, Clone)]
 pub struct RemoveCommand {

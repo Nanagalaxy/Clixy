@@ -13,6 +13,8 @@ use std::{
     time::Duration,
 };
 
+use super::BaseCmdOpt;
+
 #[derive(Args, Clone)]
 pub struct RemoveCommand {
     #[arg(
@@ -23,6 +25,9 @@ pub struct RemoveCommand {
         help = "The source path to copy"
     )]
     source: String,
+
+    #[clap(flatten)]
+    base: BaseCmdOpt,
 
     #[arg(
         long,
@@ -45,9 +50,28 @@ pub struct RemoveCommand {
 pub fn execute_remove(cmd: RemoveCommand) {
     let RemoveCommand {
         source,
+        base: BaseCmdOpt { workers },
         only_files,
         yes,
     } = cmd;
+
+    match rayon::ThreadPoolBuilder::new()
+        .num_threads(workers)
+        .build_global()
+    {
+        Ok(_) => {}
+        Err(_) => {
+            eprintln!(
+                "Error setting the number of threads for rayon, using default value {}",
+                rayon::current_num_threads()
+            );
+
+            if !confirm_continue() {
+                println!("Aborting remove");
+                return;
+            }
+        }
+    }
 
     let source_path = Path::new(&source);
 

@@ -119,7 +119,7 @@ pub fn check_permissions(path: &Path, test_write: bool) -> Result<AllowedPermiss
     })
 }
 
-/// Function to confirm if the user wants to continue with the operation
+/// Function to confirm if the user wants to continue with the operation.
 /// Returns true if the user confirms, false otherwise
 /// Defaults to false if the user doesn't input anything
 pub fn confirm_continue() -> bool {

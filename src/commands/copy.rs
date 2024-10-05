@@ -1,11 +1,13 @@
 use crate::path_content::PathContent;
 use crate::progress_bar_helper;
-use crate::utils::{add_error, calculate_hash};
+use crate::utils::{add_error, calculate_hash, confirm_continue};
 use clap::{builder, Args};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs::{copy, create_dir_all};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+
+use super::BaseCmdOpt;
 
 #[derive(PartialEq)]
 pub enum CopyTypesOptions {
@@ -64,6 +66,9 @@ pub struct CopyCommand {
     destination: String,
 
     #[clap(flatten)]
+    base: BaseCmdOpt,
+
+    #[clap(flatten)]
     options: ArgsCopyPossiblesOptions,
 
     #[arg(
@@ -89,20 +94,13 @@ pub struct CopyCommand {
         help = "Skip verification of files after copying them to the destination."
     )]
     no_verify: bool,
-
-    #[arg(
-        long,
-        default_value = "10",
-        value_parser = builder::RangedU64ValueParser::<usize>::new(),
-        help = "Set the number of worker threads to use. Must be greater than 0."
-    )]
-    workers: usize,
 }
 
 pub fn execute_copy(cmd: CopyCommand) {
     let CopyCommand {
         source,
         destination,
+        base: BaseCmdOpt { workers },
         options:
             ArgsCopyPossiblesOptions {
                 replace,
@@ -112,7 +110,6 @@ pub fn execute_copy(cmd: CopyCommand) {
         copy_target,
         only_folders,
         no_verify,
-        workers,
     } = cmd;
 
     let option = match (replace, complete, update) {
@@ -132,6 +129,11 @@ pub fn execute_copy(cmd: CopyCommand) {
                 "Error setting the number of threads for rayon, using default value {}",
                 rayon::current_num_threads()
             );
+
+            if !confirm_continue() {
+                println!("Aborting copy");
+                return;
+            }
         }
     }
 

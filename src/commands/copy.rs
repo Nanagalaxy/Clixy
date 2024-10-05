@@ -1,3 +1,4 @@
+use super::BaseCmdOpt;
 use crate::path_content::PathContent;
 use crate::progress_bar_helper;
 use crate::utils::{add_error, calculate_hash, confirm_continue};
@@ -6,8 +7,6 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs::{copy, create_dir_all};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-
-use super::BaseCmdOpt;
 
 #[derive(PartialEq)]
 pub enum CopyTypesOptions {
@@ -147,6 +146,11 @@ pub fn execute_copy(cmd: CopyCommand) {
         return;
     }
 
+    if path_content.entries == 0 {
+        println!("Source path is empty, nothing to remove");
+        return;
+    }
+
     if destination_path.exists() && option == CopyTypesOptions::None {
         let content = match destination_path.read_dir() {
             Ok(content) => content,
@@ -171,15 +175,19 @@ pub fn execute_copy(cmd: CopyCommand) {
 
     let list_of_errors = Arc::new(Mutex::new(vec![]));
 
-    copy_dirs(
-        &path_content,
-        source_path,
-        destination_path,
-        &list_of_errors,
-        copy_target,
-    );
+    if !path_content.list_of_dirs.is_empty() {
+        copy_dirs(
+            &path_content,
+            source_path,
+            destination_path,
+            &list_of_errors,
+            copy_target,
+        );
+    } else {
+        println!("No directories to copy");
+    }
 
-    if !only_folders {
+    if !only_folders && !path_content.list_of_files.is_empty() {
         let copied_files = copy_files(
             &path_content,
             source_path,
@@ -192,6 +200,8 @@ pub fn execute_copy(cmd: CopyCommand) {
         if !no_verify {
             verify_copy(copied_files, &list_of_errors);
         }
+    } else {
+        println!("No files to copy or files were skipped");
     }
 
     let list_of_errors = match Arc::try_unwrap(list_of_errors) {

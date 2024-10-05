@@ -1,10 +1,10 @@
-use crate::utils::{check_permissions, confirm_continue, round_bytes_size};
-use clap::{builder, Args};
-use fs_extra::dir::{get_dir_content, DirContent};
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use super::BaseCmdOpt;
+use crate::path_content::PathContent;
+use crate::progress_bar_helper;
+use crate::utils::{add_error, confirm_continue};
+use clap::{builder, ArgAction, Args};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs::remove_dir;
-use std::io::{Error, ErrorKind, Result};
 use std::{
     fs::remove_file,
     path::Path,
@@ -13,8 +13,6 @@ use std::{
     time::Duration,
 };
 
-use super::BaseCmdOpt;
-
 #[derive(Args, Clone)]
 pub struct RemoveCommand {
     #[arg(
@@ -22,7 +20,7 @@ pub struct RemoveCommand {
         long,
         required = true,
         value_parser = builder::NonEmptyStringValueParser::new(),
-        help = "The source path to copy"
+        help = "The source path to remove from."
     )]
     source: String,
 
@@ -33,7 +31,7 @@ pub struct RemoveCommand {
         long,
         default_value = "false",
         value_parser = builder::BoolValueParser::new(),
-        help = "Only remove files, not directories"
+        help = "Remove only files, skipping all folders."
     )]
     only_files: bool,
 
@@ -42,9 +40,18 @@ pub struct RemoveCommand {
         long,
         default_value = "false",
         value_parser = builder::BoolValueParser::new(),
-        help = "Confirm the remove operation before proceeding"
+        help = "Automatically confirms the removal operation without prompting for user confirmation."
     )]
     yes: bool,
+
+    #[arg(
+        long,
+        default_value = "true",
+        value_parser = builder::BoolValueParser::new(),
+        action = ArgAction::SetFalse,
+        help = "Remove only the content of the source path, not the source path itself."
+    )]
+    content_only: bool,
 }
 
 pub fn execute_remove(cmd: RemoveCommand) {
@@ -53,6 +60,7 @@ pub fn execute_remove(cmd: RemoveCommand) {
         base: BaseCmdOpt { workers },
         only_files,
         yes,
+        content_only,
     } = cmd;
 
     match rayon::ThreadPoolBuilder::new()
@@ -75,207 +83,117 @@ pub fn execute_remove(cmd: RemoveCommand) {
 
     let source_path = Path::new(&source);
 
-    let remove_result = do_remove(source_path, only_files, yes);
+    let mut path_content = PathContent::new();
 
-    if remove_result {
-        println!("Successfully removed {}", source);
-    } else {
-        eprintln!("Failed to remove {}", source);
+    if let Err(_) = path_content.index_entries(source_path, content_only) {
+        eprintln!("Error indexing source path, aborting remove");
+        return;
     }
-}
 
-fn do_remove(source_path: &Path, only_files: bool, prompt_confirm: bool) -> bool {
-    let m = MultiProgress::new();
+    if path_content.entries == 0 {
+        println!("Source path is empty, nothing to remove");
+        return;
+    }
 
-    let dir_content = match get_dir_content(source_path) {
-        Ok(content) => content,
-        Err(_) => {
-            eprintln!("Error reading contents of source folder, the path may not exist");
-            return false;
-        }
-    };
-
-    if !prompt_confirm {
+    if !yes {
         println!(
-            "Removing {} files and {} directories from {} ({})",
-            dir_content.files.len(),
-            dir_content.directories.len(),
+            "Removing {} files and {} directories from {} ({} entries)",
+            path_content.list_of_files.len(),
+            path_content.list_of_dirs.len(),
             source_path.display(),
-            round_bytes_size(dir_content.dir_size)
+            path_content.entries
         );
 
         if !confirm_continue() {
             println!("Aborting remove");
-            return false;
+            return;
         }
     }
 
-    let pb_check = m.add(ProgressBar::new(dir_content.files.len() as u64));
-    pb_check.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed}] [{wide_bar:.cyan/blue}] {pos}/{len} {msg}")
-            .unwrap_or(ProgressStyle::default_bar())
-            .progress_chars("#>-"),
-    );
+    let list_of_errors = Arc::new(Mutex::new(vec![]));
 
-    // Start the progress bar
-    pb_check.set_message("Checking source files");
-
-    // Wrap the progress bar to handle parallel iterations
-    let pb_check = Arc::new(pb_check);
-
-    // Start a thread to handle the progress bar
-    let pb_check_clone = Arc::clone(&pb_check);
-    let ticker = thread::spawn(move || {
-        while !pb_check_clone.is_finished() {
-            pb_check_clone.tick();
-            thread::sleep(Duration::from_millis(100));
-        }
-    });
-
-    // Set a flag if any file is not accessible
-    let check_error = Arc::new(Mutex::new(false));
-
-    dir_content.files.par_iter().for_each(|item| {
-        let pb_check = Arc::clone(&pb_check);
-
-        match check_permissions(Path::new(item), true) {
-            Ok(permissions) => {
-                if !permissions.read {
-                    eprintln!("Source file {:?} not readable", item);
-                    *check_error.lock().unwrap() = true;
-                } else if !permissions.write {
-                    eprintln!("Source file {:?} not writable", item);
-                    *check_error.lock().unwrap() = true;
-                }
-            }
-            Err(_) => {
-                eprintln!("Source file {:?} not accessible", item);
-                *check_error.lock().unwrap() = true;
-            }
-        }
-
-        pb_check.inc(1);
-    });
-
-    if *check_error.lock().unwrap() {
-        pb_check.finish_with_message("Error checking source files, aborting remove");
-        return false;
+    if !path_content.list_of_files.is_empty() {
+        remove_files(&path_content, &list_of_errors);
     } else {
-        pb_check.finish_with_message("Source files checked successfully");
+        println!("No files to remove");
     }
 
-    // Wait for the ticker thread to finish
-    ticker.join().unwrap();
-
-    if let Err(_) = remove_files(&dir_content) {
-        return false;
+    if !only_files && !path_content.list_of_dirs.is_empty() {
+        remove_dirs(&path_content, &list_of_errors, source_path);
+    } else {
+        println!("No directories to remove or directories removal skipped");
     }
 
-    if !only_files {
-        if let Err(_) = remove_directories(&dir_content) {
-            return false;
+    let list_of_errors = match Arc::try_unwrap(list_of_errors) {
+        Ok(list_of_errors) => list_of_errors.into_inner().unwrap_or(vec![]),
+        Err(_) => {
+            eprintln!("Error getting list of errors, somethings went wrong");
+            return;
+        }
+    };
+
+    if list_of_errors.is_empty() {
+        println!("Remove completed successfully");
+    } else {
+        eprintln!(
+            "{} error(s) occurred during the remove :",
+            list_of_errors.len()
+        );
+        for error in list_of_errors {
+            eprintln!("- {}", error);
         }
     }
-
-    true
 }
 
-fn remove_files(dir_content: &DirContent) -> Result<()> {
-    let m = MultiProgress::new();
+fn remove_files(path_content: &PathContent, list_of_errors: &Arc<Mutex<Vec<String>>>) {
+    let pb = progress_bar_helper::create_progress(path_content.list_of_files.len() as u64);
 
-    let pb_remove = m.add(ProgressBar::new(dir_content.files.len() as u64));
-    pb_remove.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed}] [{wide_bar:.cyan/blue}] {pos}/{len} {msg}")
-            .unwrap_or(ProgressStyle::default_bar())
-            .progress_chars("#>-"),
-    );
+    pb.set_message("Removing files");
 
-    pb_remove.set_message("Removing source files");
-    let pb_remove = Arc::new(pb_remove);
-
-    let pb_remove_clone = Arc::clone(&pb_remove);
-    let ticker = thread::spawn(move || {
-        while !pb_remove_clone.is_finished() {
-            pb_remove_clone.tick();
-            thread::sleep(Duration::from_millis(100));
-        }
-    });
-
-    let remove_error = Arc::new(Mutex::new(false));
-
-    dir_content.files.par_iter().for_each(|item| {
-        let pb_remove = Arc::clone(&pb_remove);
-
+    path_content.list_of_files.par_iter().for_each(|item| {
         if let Err(_) = remove_file(item) {
-            eprintln!("Error removing file {:?}", item);
-            *remove_error.lock().unwrap() = true;
+            add_error(list_of_errors, format!("Error removing file {:?}", item));
+            return;
         }
 
-        pb_remove.inc(1);
+        pb.inc(1);
     });
 
-    if *remove_error.lock().unwrap() {
-        pb_remove.finish_with_message("Error removing source files");
-        return Err(Error::new(ErrorKind::Other, "Error removing source files"));
-    } else {
-        pb_remove.finish_with_message("Source files removed successfully");
-    }
-
-    ticker.join().unwrap();
-
-    Ok(())
+    pb.finish_with_message("Files removed");
 }
 
-fn remove_directories(dir_content: &DirContent) -> Result<()> {
-    let m = MultiProgress::new();
+fn remove_dirs(
+    path_content: &PathContent,
+    list_of_errors: &Arc<Mutex<Vec<String>>>,
+    source_path: &Path,
+) {
+    let pb = progress_bar_helper::create_progress(path_content.list_of_dirs.len() as u64);
 
-    let pb_remove = m.add(ProgressBar::new(dir_content.directories.len() as u64));
-    pb_remove.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed}] [{wide_bar:.cyan/blue}] {pos}/{len} {msg}")
-            .unwrap_or(ProgressStyle::default_bar())
-            .progress_chars("#>-"),
-    );
+    pb.set_message("Removing directories");
 
-    pb_remove.set_message("Removing source directories");
-    let pb_remove = Arc::new(pb_remove);
+    path_content.list_of_dirs.par_iter().for_each(|item| {
+        // Check if the source path is in the list of directories
+        if item == source_path {
+            // Wait util the source path is empty before removing it
+            while let Ok(content) = source_path.read_dir() {
+                if content.count() == 0 {
+                    break;
+                }
 
-    let pb_remove_clone = Arc::clone(&pb_remove);
-    let ticker = thread::spawn(move || {
-        while !pb_remove_clone.is_finished() {
-            pb_remove_clone.tick();
-            thread::sleep(Duration::from_millis(100));
+                thread::sleep(Duration::from_millis(100));
+            }
         }
-    });
 
-    let remove_error = Arc::new(Mutex::new(false));
-
-    // Remove directories in reverse order to ensure the directory is empty
-    dir_content.directories.iter().rev().for_each(|item| {
-        let pb_remove = Arc::clone(&pb_remove);
-
-        // Ensure the directory is empty before removing
         if let Err(_) = remove_dir(item) {
-            eprintln!("Error removing directory {:?}", item);
-            *remove_error.lock().unwrap() = true;
+            add_error(
+                list_of_errors,
+                format!("Error removing directory {:?}", item),
+            );
+            return;
         }
 
-        pb_remove.inc(1);
+        pb.inc(1);
     });
 
-    if *remove_error.lock().unwrap() {
-        pb_remove.finish_with_message("Error removing source directories");
-        return Err(Error::new(
-            ErrorKind::Other,
-            "Error removing source directories",
-        ));
-    } else {
-        pb_remove.finish_with_message("Source directories removed successfully");
-    }
-
-    ticker.join().unwrap();
-
-    Ok(())
+    pb.finish_with_message("Directories removed");
 }

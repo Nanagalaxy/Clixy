@@ -1,7 +1,7 @@
 use super::BaseCmdOpt;
 use crate::path_content::PathContent;
 use crate::progress_bar_helper;
-use crate::utils::{add_error, calculate_hash, confirm_continue};
+use crate::utils::{add_error, calculate_hash, confirm_continue, round_bytes_size};
 use clap::{builder, Args};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs::{copy, create_dir_all};
@@ -213,7 +213,14 @@ pub fn execute_copy(cmd: CopyCommand) {
     };
 
     if list_of_errors.is_empty() {
-        println!("Copy completed successfully");
+        println!(
+            "Copied {} files and {} directories from {} ({} entries, {})",
+            path_content.list_of_files.len(),
+            path_content.list_of_dirs.len(),
+            source_path.display(),
+            path_content.entries,
+            round_bytes_size(path_content.size)
+        );
     } else {
         eprintln!(
             "{} error(s) occurred during the copy :",

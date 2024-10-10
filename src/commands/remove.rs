@@ -1,7 +1,7 @@
 use super::BaseCmdOpt;
 use crate::path_content::PathContent;
 use crate::progress_bar_helper;
-use crate::utils::{add_error, confirm_continue};
+use crate::utils::{add_error, confirm_continue, round_bytes_size};
 use clap::{builder, ArgAction, Args};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs::remove_dir;
@@ -97,11 +97,12 @@ pub fn execute_remove(cmd: RemoveCommand) {
 
     if !yes {
         println!(
-            "Removing {} files and {} directories from {} ({} entries)",
+            "Removing {} files and {} directories from {} ({} entries, {})",
             path_content.list_of_files.len(),
             path_content.list_of_dirs.len(),
             source_path.display(),
-            path_content.entries
+            path_content.entries,
+            round_bytes_size(path_content.size)
         );
 
         if !confirm_continue() {
@@ -133,7 +134,14 @@ pub fn execute_remove(cmd: RemoveCommand) {
     };
 
     if list_of_errors.is_empty() {
-        println!("Remove completed successfully");
+        println!(
+            "Removed {} files and {} directories from {} ({} entries, {})",
+            path_content.list_of_files.len(),
+            path_content.list_of_dirs.len(),
+            source_path.display(),
+            path_content.entries,
+            round_bytes_size(path_content.size)
+        );
     } else {
         eprintln!(
             "{} error(s) occurred during the remove :",

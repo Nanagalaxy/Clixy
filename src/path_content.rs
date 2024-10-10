@@ -6,10 +6,16 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct PathContent {
+    /// The number of entries in the path
     pub entries: u64,
+
     /// The size of the path in bytes
     pub size: u64,
+
+    /// A list of directories in the path
     pub list_of_dirs: Vec<PathBuf>,
+
+    /// A list of files in the path
     pub list_of_files: Vec<PathBuf>,
 }
 

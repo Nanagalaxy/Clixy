@@ -1,6 +1,7 @@
 use clap::{builder, Args};
 
 pub mod copy;
+pub mod r#move;
 pub mod remove;
 
 /// A struct that holds the options available for all commands.

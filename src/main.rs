@@ -1,12 +1,13 @@
 mod commands;
+mod path_content;
 mod progress_bar_helper;
 mod utils;
-mod path_content;
 
 use clap::{crate_authors, crate_description, crate_version, Parser, Subcommand};
 
 use commands::{
     copy::{execute_copy, CopyCommand},
+    r#move::{execute_move, MoveCommand},
     remove::{execute_remove, RemoveCommand},
 };
 
@@ -24,6 +25,11 @@ enum Commands {
 
     #[command(about = "Remove the source path")]
     Remove(RemoveCommand),
+
+    #[command(
+        about = "Move the source path to the destination path. It's the same as copying the source path to the destination path and then removing the source path."
+    )]
+    Move(MoveCommand),
 }
 
 fn main() {
@@ -35,6 +41,9 @@ fn main() {
         }
         Commands::Remove(command) => {
             execute_remove(command);
+        }
+        Commands::Move(command) => {
+            execute_move(command);
         }
     }
 }

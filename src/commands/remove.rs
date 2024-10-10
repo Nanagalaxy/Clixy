@@ -113,13 +113,15 @@ pub fn execute_remove(cmd: RemoveCommand) {
 
     let list_of_errors = Arc::new(Mutex::new(vec![]));
 
+    let mut files_ok = false;
+
     if !path_content.list_of_files.is_empty() {
-        remove_files(&path_content, &list_of_errors);
+        files_ok = remove_files(&path_content, &list_of_errors);
     } else {
         println!("No files to remove");
     }
 
-    if !only_files && !path_content.list_of_dirs.is_empty() {
+    if files_ok && !only_files && !path_content.list_of_dirs.is_empty() {
         remove_dirs(&path_content, &list_of_errors, source_path);
     } else {
         println!("No directories to remove or directories removal skipped");
@@ -153,14 +155,25 @@ pub fn execute_remove(cmd: RemoveCommand) {
     }
 }
 
-fn remove_files(path_content: &PathContent, list_of_errors: &Arc<Mutex<Vec<String>>>) {
+/// Remove all files in the path content.
+/// Returns true if all files were removed successfully, false otherwise.
+/// Note: because of the parallel processing, a flag protected by a mutex is used to track the status.
+/// At the end of the process, the mutex is unwrapped to get the final status. If an error with the mutex occurs,
+/// the function returns false.
+pub fn remove_files(path_content: &PathContent, list_of_errors: &Arc<Mutex<Vec<String>>>) -> bool {
     let pb = progress_bar_helper::create_progress(path_content.list_of_files.len() as u64);
 
     pb.set_message("Removing files");
 
+    let is_ok = Mutex::new(true);
+
     path_content.list_of_files.par_iter().for_each(|item| {
         if let Err(_) = remove_file(item) {
             add_error(list_of_errors, format!("Error removing file {:?}", item));
+            match is_ok.lock() {
+                Ok(mut is_ok) => *is_ok = false,
+                Err(_) => {}
+            }
             return;
         }
 
@@ -168,9 +181,11 @@ fn remove_files(path_content: &PathContent, list_of_errors: &Arc<Mutex<Vec<Strin
     });
 
     pb.finish_with_message("Files removed");
+
+    is_ok.into_inner().unwrap_or(false)
 }
 
-fn remove_dirs(
+pub fn remove_dirs(
     path_content: &PathContent,
     list_of_errors: &Arc<Mutex<Vec<String>>>,
     source_path: &Path,

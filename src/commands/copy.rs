@@ -147,7 +147,7 @@ pub fn execute_copy(cmd: CopyCommand) {
     }
 
     if path_content.entries == 0 {
-        println!("Source path is empty, nothing to remove");
+        println!("Source path is empty, nothing to copy");
         return;
     }
 
@@ -163,7 +163,7 @@ pub fn execute_copy(cmd: CopyCommand) {
         };
 
         if content.count() > 0 {
-            eprintln!("Destination folder exists, please provide an empty folder or use an option");
+            eprintln!("Destination folder exists and is not empty, please provide an empty folder or use an option");
             return;
         }
     } else {
@@ -175,8 +175,10 @@ pub fn execute_copy(cmd: CopyCommand) {
 
     let list_of_errors = Arc::new(Mutex::new(vec![]));
 
+    let mut dirs_ok = false;
+
     if !path_content.list_of_dirs.is_empty() {
-        copy_dirs(
+        dirs_ok = copy_dirs(
             &path_content,
             source_path,
             destination_path,
@@ -187,7 +189,7 @@ pub fn execute_copy(cmd: CopyCommand) {
         println!("No directories to copy");
     }
 
-    if !only_folders && !path_content.list_of_files.is_empty() {
+    if dirs_ok && !only_folders && !path_content.list_of_files.is_empty() {
         let copied_files = copy_files(
             &path_content,
             source_path,
@@ -232,16 +234,23 @@ pub fn execute_copy(cmd: CopyCommand) {
     }
 }
 
-fn copy_dirs(
+/// Copy directories from the source path to the destination path.
+/// Returns true if the copy was successful, false otherwise.
+/// Note: because of the parallel processing, a flag protected by a mutex is used to track the status.
+/// At the end of the process, the mutex is unwrapped to get the final status. If an error with the mutex occurs,
+/// the function returns false.
+pub fn copy_dirs(
     path_content: &PathContent,
     source_path: &Path,
     destination_path: &Path,
     list_of_errors: &Arc<Mutex<Vec<String>>>,
     copy_target: bool,
-) {
+) -> bool {
     let pb = progress_bar_helper::create_progress(path_content.list_of_dirs.len() as u64);
 
     pb.set_message("Copying directories");
+
+    let is_ok = Mutex::new(true);
 
     path_content.list_of_dirs.par_iter().for_each(|dir| {
         let relative_path: &Path;
@@ -254,6 +263,10 @@ fn copy_dirs(
                         list_of_errors,
                         format!("Impossible to determine parent path for {:?}", source_path),
                     );
+                    match is_ok.lock() {
+                        Ok(mut is_ok) => *is_ok = false,
+                        Err(_) => {}
+                    }
                     return;
                 }
             };
@@ -265,6 +278,10 @@ fn copy_dirs(
                         list_of_errors,
                         format!("Impossible to determine relative path for {:?}", dir),
                     );
+                    match is_ok.lock() {
+                        Ok(mut is_ok) => *is_ok = false,
+                        Err(_) => {}
+                    }
                     return;
                 }
             };
@@ -276,6 +293,10 @@ fn copy_dirs(
                         list_of_errors,
                         format!("Impossible to determine relative path for {:?}", dir),
                     );
+                    match is_ok.lock() {
+                        Ok(mut is_ok) => *is_ok = false,
+                        Err(_) => {}
+                    }
                     return;
                 }
             };
@@ -283,12 +304,16 @@ fn copy_dirs(
 
         let destination_dir = destination_path.join(relative_path);
 
-        // Do the copy of the directories
+        // Do the copy of the director&ies
         if let Err(e) = create_dir_all(&destination_dir) {
             add_error(
                 list_of_errors,
                 format!("Unable to create directory {:?}: {:?}", destination_dir, e),
             );
+            match is_ok.lock() {
+                Ok(mut is_ok) => *is_ok = false,
+                Err(_) => {}
+            }
             return;
         }
 
@@ -296,10 +321,12 @@ fn copy_dirs(
     });
 
     pb.finish_with_message("Directories copied");
+
+    is_ok.into_inner().unwrap_or(false)
 }
 
 /// Returns a vector with the paths of the copied files (source and destination)
-fn copy_files(
+pub fn copy_files(
     path_content: &PathContent,
     source_path: &Path,
     destination_path: &Path,
@@ -456,7 +483,10 @@ fn copy_files(
     copied_files
 }
 
-fn verify_copy(copied_files: Vec<(PathBuf, PathBuf)>, list_of_errors: &Arc<Mutex<Vec<String>>>) {
+pub fn verify_copy(
+    copied_files: Vec<(PathBuf, PathBuf)>,
+    list_of_errors: &Arc<Mutex<Vec<String>>>,
+) {
     let pb = progress_bar_helper::create_progress(copied_files.len() as u64);
 
     pb.set_message("Verifying files");

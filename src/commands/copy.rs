@@ -173,6 +173,23 @@ pub fn execute_copy(cmd: CopyCommand) {
         }
     }
 
+    match fs4::available_space(destination_path) {
+        Ok(available_space) => {
+            if available_space < path_content.size {
+                eprintln!(
+                    "Not enough space available in the destination folder ({} needed, {} available), aborting copy",
+                    round_bytes_size(path_content.size),
+                    round_bytes_size(available_space)
+                );
+                return;
+            }
+        }
+        Err(_) => {
+            eprintln!("Error getting available space in the destination folder, aborting copy");
+            return;
+        }
+    }
+
     let list_of_errors = Arc::new(Mutex::new(vec![]));
 
     let mut dirs_ok = false;

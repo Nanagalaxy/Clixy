@@ -1,5 +1,5 @@
 use super::BaseCmdOpt;
-use crate::path_content::PathContent;
+use crate::path_content::{IgnoreFlag, PathContent};
 use crate::progress_bar_helper;
 use crate::utils::{add_error, calculate_hash, confirm_continue, round_bytes_size};
 use clap::{builder, Args};
@@ -141,7 +141,13 @@ pub fn execute_copy(cmd: CopyCommand) {
 
     let mut path_content = PathContent::new();
 
-    if let Err(_) = path_content.index_entries(source_path, copy_target) {
+    let ignore_flag = if only_folders {
+        IgnoreFlag::Files
+    } else {
+        IgnoreFlag::None
+    };
+
+    if let Err(_) = path_content.index_entries(source_path, copy_target, ignore_flag) {
         eprintln!("Error indexing source path, aborting copy");
         return;
     }
@@ -192,7 +198,7 @@ pub fn execute_copy(cmd: CopyCommand) {
 
     let list_of_errors = Arc::new(Mutex::new(vec![]));
 
-    let mut dirs_ok = false;
+    let dirs_ok;
 
     if !path_content.list_of_dirs.is_empty() {
         dirs_ok = copy_dirs(
@@ -203,10 +209,11 @@ pub fn execute_copy(cmd: CopyCommand) {
             copy_target,
         );
     } else {
+        dirs_ok = true;
         println!("No directories to copy");
     }
 
-    if dirs_ok && !only_folders && !path_content.list_of_files.is_empty() {
+    if dirs_ok && !path_content.list_of_files.is_empty() {
         let copied_files = copy_files(
             &path_content,
             source_path,

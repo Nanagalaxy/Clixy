@@ -4,7 +4,7 @@ use super::{
     BaseCmdOpt,
 };
 use crate::{
-    path_content::PathContent,
+    path_content::{IgnoreFlag, PathContent},
     utils::{confirm_continue, round_bytes_size},
 };
 use clap::{builder, Args};
@@ -69,7 +69,7 @@ pub fn execute_move(cmd: MoveCommand) {
 
     let into = false;
 
-    if let Err(_) = path_content.index_entries(source_path, into) {
+    if let Err(_) = path_content.index_entries(source_path, into, IgnoreFlag::None) {
         eprintln!("Error indexing source path, aborting move");
         return;
     }
@@ -103,7 +103,7 @@ pub fn execute_move(cmd: MoveCommand) {
 
     let copy_list_of_errors = Arc::new(Mutex::new(vec![]));
 
-    let mut dirs_ok = false;
+    let dirs_ok;
 
     if !path_content.list_of_dirs.is_empty() {
         dirs_ok = copy_dirs(
@@ -114,6 +114,7 @@ pub fn execute_move(cmd: MoveCommand) {
             into,
         );
     } else {
+        dirs_ok = true;
         println!("No directories to move");
     }
 

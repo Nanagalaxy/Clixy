@@ -1,5 +1,5 @@
 use super::BaseCmdOpt;
-use crate::path_content::PathContent;
+use crate::path_content::{IgnoreFlag, PathContent};
 use crate::progress_bar_helper;
 use crate::utils::{add_error, confirm_continue, round_bytes_size};
 use clap::{builder, ArgAction, Args};
@@ -85,7 +85,13 @@ pub fn execute_remove(cmd: RemoveCommand) {
 
     let mut path_content = PathContent::new();
 
-    if let Err(_) = path_content.index_entries(source_path, content_only) {
+    let ignore_flag = if only_files {
+        IgnoreFlag::Directories
+    } else {
+        IgnoreFlag::None
+    };
+
+    if let Err(_) = path_content.index_entries(source_path, content_only, ignore_flag) {
         eprintln!("Error indexing source path, aborting remove");
         return;
     }
@@ -113,15 +119,16 @@ pub fn execute_remove(cmd: RemoveCommand) {
 
     let list_of_errors = Arc::new(Mutex::new(vec![]));
 
-    let mut files_ok = false;
+    let files_ok;
 
     if !path_content.list_of_files.is_empty() {
         files_ok = remove_files(&path_content, &list_of_errors);
     } else {
+        files_ok = true;
         println!("No files to remove");
     }
 
-    if files_ok && !only_files && !path_content.list_of_dirs.is_empty() {
+    if files_ok && !path_content.list_of_dirs.is_empty() {
         remove_dirs(&path_content, &list_of_errors, source_path);
     } else {
         println!("No directories to remove or directories removal skipped");

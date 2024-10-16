@@ -1,4 +1,5 @@
 use crate::progress_bar_helper;
+use indicatif::ProgressBar;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::fs::read_dir;
 use std::io::{Error, ErrorKind, Result};
@@ -19,6 +20,19 @@ pub struct PathContent {
     pub list_of_files: Vec<PathBuf>,
 }
 
+#[derive(Debug)]
+pub enum IgnoreFlag {
+    Files,
+    Directories,
+    None,
+}
+
+impl Default for IgnoreFlag {
+    fn default() -> Self {
+        IgnoreFlag::None
+    }
+}
+
 impl PathContent {
     pub fn new() -> Self {
         PathContent {
@@ -29,7 +43,7 @@ impl PathContent {
         }
     }
 
-    pub fn index_entries(&mut self, path: &Path, into: bool) -> Result<()> {
+    pub fn index_entries(&mut self, path: &Path, into: bool, ignore: IgnoreFlag) -> Result<()> {
         let pb = progress_bar_helper::create_spinner();
 
         pb.set_message(format!("Indexing entries: {}", self.entries));
@@ -50,11 +64,17 @@ impl PathContent {
         };
 
         while let Some(item) = list_to_explore.pop() {
-            self.entries += 1;
-            pb.set_message(format!("Indexing entries: {}", self.entries));
-
             if item.is_dir() {
-                self.list_of_dirs.push(item.clone());
+                match ignore {
+                    IgnoreFlag::Directories => {
+                        // Do not index directories
+                        // Don't call continue here because we need to explore the directory content
+                    }
+                    _ => {
+                        self.list_of_dirs.push(item.clone());
+                        self.increment_entries(&pb);
+                    }
+                }
 
                 match read_dir(item) {
                     Ok(entries) => {
@@ -80,6 +100,16 @@ impl PathContent {
                     }
                 }
             } else if item.is_file() {
+                match ignore {
+                    IgnoreFlag::Files => {
+                        continue;
+                    }
+                    _ => {
+                        // Let's index the file
+                        // Push isn't done here because we need to check the metadata before indexing the file
+                    }
+                }
+
                 match item.metadata() {
                     Ok(metadata) => {
                         self.size += metadata.len();
@@ -90,6 +120,7 @@ impl PathContent {
                 }
 
                 self.list_of_files.push(item);
+                self.increment_entries(&pb);
             } else {
                 return Err(Error::new(ErrorKind::Other, "Error processing source path"));
             }
@@ -98,5 +129,10 @@ impl PathContent {
         pb.finish_with_message(format!("Indexed entries: {}", self.entries));
 
         Ok(())
+    }
+
+    fn increment_entries(&mut self, pb: &ProgressBar) {
+        self.entries += 1;
+        pb.set_message(format!("Indexing entries: {}", self.entries));
     }
 }

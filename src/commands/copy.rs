@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 #[derive(PartialEq)]
-pub enum CopyTypesOptions {
+pub enum OptionsTypes {
     None,
     Replace,
     Complete,
@@ -45,7 +45,7 @@ struct ArgsCopyPossiblesOptions {
 }
 
 #[derive(Args, Clone)]
-pub struct CopyCommand {
+pub struct Command {
     #[arg(
         short,
         long,
@@ -95,8 +95,8 @@ pub struct CopyCommand {
     no_verify: bool,
 }
 
-pub fn execute_copy(cmd: CopyCommand) {
-    let CopyCommand {
+pub fn execute(cmd: Command) {
+    let Command {
         source,
         destination,
         base: BaseCmdOpt { workers },
@@ -112,27 +112,25 @@ pub fn execute_copy(cmd: CopyCommand) {
     } = cmd;
 
     let option = match (replace, complete, update) {
-        (true, false, false) => CopyTypesOptions::Replace,
-        (false, true, false) => CopyTypesOptions::Complete,
-        (false, false, true) => CopyTypesOptions::Update,
-        _ => CopyTypesOptions::None,
+        (true, false, false) => OptionsTypes::Replace,
+        (false, true, false) => OptionsTypes::Complete,
+        (false, false, true) => OptionsTypes::Update,
+        _ => OptionsTypes::None,
     };
 
-    match rayon::ThreadPoolBuilder::new()
+    if rayon::ThreadPoolBuilder::new()
         .num_threads(workers)
         .build_global()
+        .is_err()
     {
-        Ok(_) => {}
-        Err(_) => {
-            eprintln!(
-                "Error setting the number of threads for rayon, using default value {}",
-                rayon::current_num_threads()
-            );
+        eprintln!(
+            "Error setting the number of threads for rayon, using default value {}",
+            rayon::current_num_threads()
+        );
 
-            if !confirm_continue() {
-                println!("Aborting copy");
-                return;
-            }
+        if !confirm_continue() {
+            println!("Aborting copy");
+            return;
         }
     }
 
@@ -144,10 +142,13 @@ pub fn execute_copy(cmd: CopyCommand) {
     let ignore_flag = if only_folders {
         IgnoreFlag::Files
     } else {
-        IgnoreFlag::None
+        IgnoreFlag::default()
     };
 
-    if let Err(_) = path_content.index_entries(source_path, copy_target, ignore_flag) {
+    if path_content
+        .index_entries(source_path, copy_target, &ignore_flag)
+        .is_err()
+    {
         eprintln!("Error indexing source path, aborting copy");
         return;
     }
@@ -157,50 +158,45 @@ pub fn execute_copy(cmd: CopyCommand) {
         return;
     }
 
-    if destination_path.exists() && option == CopyTypesOptions::None {
-        let content = match destination_path.read_dir() {
-            Ok(content) => content,
-            Err(_) => {
-                eprintln!(
-                    "Error reading destination folder content, check the path or permissions"
-                );
-                return;
-            }
+    if destination_path.exists() && option == OptionsTypes::None {
+        let Ok(content) = destination_path.read_dir() else {
+            eprintln!("Error reading destination folder content, check the path or permissions");
+            return;
         };
 
         if content.count() > 0 {
             eprintln!("Destination folder exists and is not empty, please provide an empty folder or use an option");
             return;
         }
+    } else if create_dir_all(destination_path).is_err() {
+        eprintln!("Unable to create destination folder, check the path or permissions");
+        return;
     } else {
-        if let Err(_) = create_dir_all(destination_path) {
-            eprintln!("Unable to create destination folder, check the path or permissions");
-            return;
-        }
+        println!("Destination path created");
     }
 
-    match fs4::available_space(destination_path) {
-        Ok(available_space) => {
-            if available_space < path_content.size {
-                eprintln!(
-                    "Not enough space available in the destination folder ({} needed, {} available), aborting copy",
-                    round_bytes_size(path_content.size),
-                    round_bytes_size(available_space)
-                );
-                return;
-            }
-        }
-        Err(_) => {
-            eprintln!("Error getting available space in the destination folder, aborting copy");
+    if let Ok(available_space) = fs4::available_space(destination_path) {
+        if available_space < path_content.size {
+            eprintln!(
+                "Not enough space available in the destination folder ({} needed, {} available), aborting copy",
+                round_bytes_size(path_content.size),
+                round_bytes_size(available_space)
+            );
             return;
         }
+    } else {
+        eprintln!("Error getting available space in the destination folder, aborting copy");
+        return;
     }
 
     let list_of_errors = Arc::new(Mutex::new(vec![]));
 
     let dirs_ok;
 
-    if !path_content.list_of_dirs.is_empty() {
+    if path_content.list_of_dirs.is_empty() {
+        dirs_ok = true;
+        println!("No directories to copy");
+    } else {
         dirs_ok = copy_dirs(
             &path_content,
             source_path,
@@ -208,9 +204,6 @@ pub fn execute_copy(cmd: CopyCommand) {
             &list_of_errors,
             copy_target,
         );
-    } else {
-        dirs_ok = true;
-        println!("No directories to copy");
     }
 
     if dirs_ok && !path_content.list_of_files.is_empty() {
@@ -224,18 +217,17 @@ pub fn execute_copy(cmd: CopyCommand) {
         );
 
         if !no_verify {
-            verify_copy(copied_files, &list_of_errors);
+            verify_copy(&copied_files, &list_of_errors);
         }
     } else {
         println!("No files to copy or files were skipped");
     }
 
-    let list_of_errors = match Arc::try_unwrap(list_of_errors) {
-        Ok(list_of_errors) => list_of_errors.into_inner().unwrap_or(vec![]),
-        Err(_) => {
-            eprintln!("Error getting list of errors, somethings went wrong");
-            return;
-        }
+    let list_of_errors = if let Ok(list_of_errors) = Arc::try_unwrap(list_of_errors) {
+        list_of_errors.into_inner().unwrap_or(vec![])
+    } else {
+        eprintln!("Error getting list of errors, somethings went wrong");
+        return;
     };
 
     if list_of_errors.is_empty() {
@@ -253,7 +245,7 @@ pub fn execute_copy(cmd: CopyCommand) {
             list_of_errors.len()
         );
         for error in list_of_errors {
-            eprintln!("- {}", error);
+            eprintln!("- {error}");
         }
     }
 }
@@ -263,6 +255,7 @@ pub fn execute_copy(cmd: CopyCommand) {
 /// Note: because of the parallel processing, a flag protected by a mutex is used to track the status.
 /// At the end of the process, the mutex is unwrapped to get the final status. If an error with the mutex occurs,
 /// the function returns false.
+#[allow(clippy::module_name_repetitions)]
 pub fn copy_dirs(
     path_content: &PathContent,
     source_path: &Path,
@@ -277,54 +270,44 @@ pub fn copy_dirs(
     let is_ok = Mutex::new(true);
 
     path_content.list_of_dirs.par_iter().for_each(|dir| {
-        let relative_path: &Path;
-
-        if copy_target {
-            let parent_path = match source_path.parent() {
-                Some(parent) => parent,
-                None => {
-                    add_error(
-                        list_of_errors,
-                        format!("Impossible to determine parent path for {:?}", source_path),
-                    );
-                    match is_ok.lock() {
-                        Ok(mut is_ok) => *is_ok = false,
-                        Err(_) => {}
-                    }
-                    return;
+        let relative_path = if copy_target {
+            let Some(parent_path) = source_path.parent() else {
+                add_error(
+                    list_of_errors,
+                    format!("Impossible to determine parent path for {source_path:?}"),
+                );
+                if let Ok(mut is_ok) = is_ok.lock() {
+                    *is_ok = false;
                 }
+                return;
             };
 
-            relative_path = match dir.strip_prefix(parent_path) {
-                Ok(rel_path) => rel_path,
-                Err(_) => {
-                    add_error(
-                        list_of_errors,
-                        format!("Impossible to determine relative path for {:?}", dir),
-                    );
-                    match is_ok.lock() {
-                        Ok(mut is_ok) => *is_ok = false,
-                        Err(_) => {}
-                    }
-                    return;
+            let Ok(rel_path) = dir.strip_prefix(parent_path) else {
+                add_error(
+                    list_of_errors,
+                    format!("Impossible to determine relative path for {dir:?}"),
+                );
+                if let Ok(mut is_ok) = is_ok.lock() {
+                    *is_ok = false;
                 }
+                return;
             };
+
+            rel_path
         } else {
-            relative_path = match dir.strip_prefix(source_path) {
-                Ok(rel_path) => rel_path,
-                Err(_) => {
-                    add_error(
-                        list_of_errors,
-                        format!("Impossible to determine relative path for {:?}", dir),
-                    );
-                    match is_ok.lock() {
-                        Ok(mut is_ok) => *is_ok = false,
-                        Err(_) => {}
-                    }
-                    return;
+            let Ok(rel_path) = dir.strip_prefix(source_path) else {
+                add_error(
+                    list_of_errors,
+                    format!("Impossible to determine relative path for {dir:?}"),
+                );
+                if let Ok(mut is_ok) = is_ok.lock() {
+                    *is_ok = false;
                 }
+                return;
             };
-        }
+
+            rel_path
+        };
 
         let destination_dir = destination_path.join(relative_path);
 
@@ -332,11 +315,10 @@ pub fn copy_dirs(
         if let Err(e) = create_dir_all(&destination_dir) {
             add_error(
                 list_of_errors,
-                format!("Unable to create directory {:?}: {:?}", destination_dir, e),
+                format!("Unable to create directory {destination_dir:?}: {e:?}"),
             );
-            match is_ok.lock() {
-                Ok(mut is_ok) => *is_ok = false,
-                Err(_) => {}
+            if let Ok(mut is_ok) = is_ok.lock() {
+                *is_ok = false;
             }
             return;
         }
@@ -350,13 +332,14 @@ pub fn copy_dirs(
 }
 
 /// Returns a vector with the paths of the copied files (source and destination)
+#[allow(clippy::module_name_repetitions)]
 pub fn copy_files(
     path_content: &PathContent,
     source_path: &Path,
     destination_path: &Path,
     list_of_errors: &Arc<Mutex<Vec<String>>>,
     copy_target: bool,
-    option: &CopyTypesOptions,
+    option: &OptionsTypes,
 ) -> Vec<(PathBuf, PathBuf)> {
     let pb = progress_bar_helper::create_progress(path_content.list_of_files.len() as u64);
 
@@ -365,101 +348,80 @@ pub fn copy_files(
     let copied_files: Arc<Mutex<Vec<(PathBuf, PathBuf)>>> = Arc::new(Mutex::new(Vec::new()));
 
     path_content.list_of_files.par_iter().for_each(|file| {
-        let relative_path: &Path;
-
-        if copy_target {
-            let parent_path = match source_path.parent() {
-                Some(parent) => parent,
-                None => {
-                    add_error(
-                        list_of_errors,
-                        format!("Impossible to determine parent path for {:?}", source_path),
-                    );
-                    return;
-                }
+        let relative_path = if copy_target {
+            let Some(parent_path) = source_path.parent() else {
+                add_error(
+                    list_of_errors,
+                    format!("Impossible to determine parent path for {source_path:?}"),
+                );
+                return;
             };
 
-            relative_path = match file.strip_prefix(parent_path) {
-                Ok(rel_path) => rel_path,
-                Err(_) => {
-                    add_error(
-                        list_of_errors,
-                        format!("Impossible to determine relative path for {:?}", file),
-                    );
-                    return;
-                }
+            let Ok(rel_path) = file.strip_prefix(parent_path) else {
+                add_error(
+                    list_of_errors,
+                    format!("Impossible to determine relative path for {file:?}"),
+                );
+                return;
             };
+
+            rel_path
         } else {
-            relative_path = match file.strip_prefix(source_path) {
-                Ok(rel_path) => rel_path,
-                Err(_) => {
-                    add_error(
-                        list_of_errors,
-                        format!("Impossible to determine relative path for {:?}", file),
-                    );
-                    return;
-                }
+            let Ok(rel_path) = file.strip_prefix(source_path) else {
+                add_error(
+                    list_of_errors,
+                    format!("Impossible to determine relative path for {file:?}"),
+                );
+                return;
             };
-        }
+
+            rel_path
+        };
 
         let destination_file = destination_path.join(relative_path);
 
         let need_copy = match option {
-            CopyTypesOptions::None => true,
-            CopyTypesOptions::Replace => true,
-            CopyTypesOptions::Complete => !destination_file.exists(),
-            CopyTypesOptions::Update => {
-                if !destination_file.exists() {
-                    true
-                } else {
-                    let source_metadata = match file.metadata() {
-                        Ok(metadata) => metadata,
-                        Err(_) => {
-                            add_error(
-                                list_of_errors,
-                                format!("Error reading metadata for file {:?}", file),
-                            );
-                            return;
-                        }
+            OptionsTypes::None | OptionsTypes::Replace => true,
+            OptionsTypes::Complete => !destination_file.exists(),
+            OptionsTypes::Update => {
+                if destination_file.exists() {
+                    let Ok(source_metadata) = file.metadata() else {
+                        add_error(
+                            list_of_errors,
+                            format!("Error reading metadata for file {file:?}"),
+                        );
+                        return;
                     };
 
-                    let destination_metadata = match destination_file.metadata() {
-                        Ok(metadata) => metadata,
-                        Err(_) => {
-                            add_error(
-                                list_of_errors,
-                                format!("Error reading metadata for file {:?}", destination_file),
-                            );
-                            return;
-                        }
+                    let Ok(destination_metadata) = destination_file.metadata() else {
+                        add_error(
+                            list_of_errors,
+                            format!("Error reading metadata for file {destination_file:?}"),
+                        );
+                        return;
                     };
 
-                    let source_modified = match source_metadata.modified() {
-                        Ok(modified) => modified,
-                        Err(_) => {
-                            add_error(
-                                list_of_errors,
-                                format!("Error reading modified time for file {:?}", file),
-                            );
-                            return;
-                        }
+                    let Ok(source_modified) = source_metadata.modified() else {
+                        add_error(
+                            list_of_errors,
+                            format!("Error reading modified time for file {file:?}"),
+                        );
+                        return;
                     };
 
-                    let destination_modified = match destination_metadata.modified() {
-                        Ok(modified) => modified,
-                        Err(_) => {
-                            add_error(
-                                list_of_errors,
-                                format!(
-                                    "Error reading modified time for file {:?}",
-                                    destination_file
-                                ),
-                            );
-                            return;
-                        }
+                    let Ok(destination_modified) = destination_metadata.modified() else {
+                        add_error(
+                            list_of_errors,
+                            format!(
+                                "Error reading modified time for file {destination_file:?}"
+                            ),
+                        );
+                        return;
                     };
 
                     source_modified > destination_modified
+                } else {
+                    true
                 }
             }
         };
@@ -470,21 +432,19 @@ pub fn copy_files(
                 add_error(
                     list_of_errors,
                     format!(
-                        "Error copying file {:?} to {:?}: {:?}",
-                        file, destination_file, e
+                        "Error copying file {file:?} to {destination_file:?}: {e:?}"
                     ),
                 );
                 return;
             }
 
             match copied_files.lock() {
-                Ok(mut copied_files) => copied_files.push((file.to_path_buf(), destination_file)),
+                Ok(mut copied_files) => copied_files.push((file.clone(), destination_file)),
                 Err(_) => {
                     add_error(
                         list_of_errors,
                         format!(
-                            "Error adding copied file {:?} to the list of copied files",
-                            destination_file
+                            "Error adding copied file {destination_file:?} to the list of copied files"
                         ),
                     );
                 }
@@ -496,19 +456,17 @@ pub fn copy_files(
 
     pb.finish_with_message("Files copied");
 
-    let copied_files = match Arc::try_unwrap(copied_files) {
-        Ok(copied_files) => copied_files.into_inner().unwrap_or(Vec::new()),
-        Err(_) => {
-            add_error(list_of_errors, "Error getting copied files".to_string());
-            vec![]
-        }
-    };
-
-    copied_files
+    if let Ok(copied_files) = Arc::try_unwrap(copied_files) {
+        copied_files.into_inner().unwrap_or(Vec::new())
+    } else {
+        add_error(list_of_errors, "Error getting copied files".to_string());
+        vec![]
+    }
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub fn verify_copy(
-    copied_files: Vec<(PathBuf, PathBuf)>,
+    copied_files: &Vec<(PathBuf, PathBuf)>,
     list_of_errors: &Arc<Mutex<Vec<String>>>,
 ) {
     let pb = progress_bar_helper::create_progress(copied_files.len() as u64);
@@ -518,37 +476,27 @@ pub fn verify_copy(
     copied_files
         .par_iter()
         .for_each(|(source_file, destination_file)| {
-            let source_hash = match calculate_hash(source_file) {
-                Ok(hash) => hash,
-                Err(_) => {
-                    add_error(
-                        list_of_errors,
-                        format!("Error calculating hash for source file {:?}", source_file),
-                    );
-                    return;
-                }
+            let Ok(source_hash) = calculate_hash(source_file) else {
+                add_error(
+                    list_of_errors,
+                    format!("Error calculating hash for source file {source_file:?}"),
+                );
+                return;
             };
 
-            let destination_hash = match calculate_hash(destination_file) {
-                Ok(hash) => hash,
-                Err(_) => {
-                    add_error(
-                        list_of_errors,
-                        format!(
-                            "Error calculating hash for destination file {:?}",
-                            destination_file
-                        ),
-                    );
-                    return;
-                }
+            let Ok(destination_hash) = calculate_hash(destination_file) else {
+                add_error(
+                    list_of_errors,
+                    format!("Error calculating hash for destination file {destination_file:?}"),
+                );
+                return;
             };
 
             if source_hash != destination_hash {
                 add_error(
                     list_of_errors,
                     format!(
-                        "Hashes don't match for files {:?} and {:?}",
-                        source_file, destination_file
+                        "Hashes don't match for files {source_file:?} and {destination_file:?}"
                     ),
                 );
             }

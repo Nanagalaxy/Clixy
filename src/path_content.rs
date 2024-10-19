@@ -20,17 +20,12 @@ pub struct PathContent {
     pub list_of_files: Vec<PathBuf>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum IgnoreFlag {
     Files,
     Directories,
+    #[default]
     None,
-}
-
-impl Default for IgnoreFlag {
-    fn default() -> Self {
-        IgnoreFlag::None
-    }
 }
 
 impl PathContent {
@@ -43,7 +38,7 @@ impl PathContent {
         }
     }
 
-    pub fn index_entries(&mut self, path: &Path, into: bool, ignore: IgnoreFlag) -> Result<()> {
+    pub fn index_entries(&mut self, path: &Path, into: bool, ignore: &IgnoreFlag) -> Result<()> {
         let pb = progress_bar_helper::create_spinner();
 
         pb.set_message(format!("Indexing entries: {}", self.entries));
@@ -65,58 +60,46 @@ impl PathContent {
 
         while let Some(item) = list_to_explore.pop() {
             if item.is_dir() {
-                match ignore {
-                    IgnoreFlag::Directories => {
-                        // Do not index directories
-                        // Don't call continue here because we need to explore the directory content
-                    }
-                    _ => {
-                        self.list_of_dirs.push(item.clone());
-                        self.increment_entries(&pb);
-                    }
+                if let IgnoreFlag::Directories = ignore {
+                    // Do not index directories
+                    // Don't call continue here because we need to explore the directory content
+                } else {
+                    self.list_of_dirs.push(item.clone());
+                    self.increment_entries(&pb);
                 }
 
-                match read_dir(item) {
-                    Ok(entries) => {
-                        for entry in entries {
-                            match entry {
-                                Ok(entry) => {
-                                    list_to_explore.push(entry.path());
-                                }
-                                Err(_) => {
-                                    return Err(Error::new(
-                                        ErrorKind::Other,
-                                        "Error reading directory content",
-                                    ));
-                                }
+                if let Ok(entries) = read_dir(item) {
+                    for entry in entries {
+                        match entry {
+                            Ok(entry) => {
+                                list_to_explore.push(entry.path());
+                            }
+                            Err(_) => {
+                                return Err(Error::new(
+                                    ErrorKind::Other,
+                                    "Error reading directory content",
+                                ));
                             }
                         }
                     }
-                    Err(_) => {
-                        return Err(Error::new(
-                            ErrorKind::Other,
-                            "Error reading directory content",
-                        ));
-                    }
+                } else {
+                    return Err(Error::new(
+                        ErrorKind::Other,
+                        "Error reading directory content",
+                    ));
                 }
             } else if item.is_file() {
-                match ignore {
-                    IgnoreFlag::Files => {
-                        continue;
-                    }
-                    _ => {
-                        // Let's index the file
-                        // Push isn't done here because we need to check the metadata before indexing the file
-                    }
+                if let IgnoreFlag::Files = ignore {
+                    // Do not index files
+                    continue;
                 }
 
-                match item.metadata() {
-                    Ok(metadata) => {
-                        self.size += metadata.len();
-                    }
-                    Err(_) => {
-                        return Err(Error::new(ErrorKind::Other, "Error reading file metadata"));
-                    }
+                // Let's index the file
+
+                if let Ok(metadata) = item.metadata() {
+                    self.size += metadata.len();
+                } else {
+                    return Err(Error::new(ErrorKind::Other, "Error reading file metadata"));
                 }
 
                 self.list_of_files.push(item);

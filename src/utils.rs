@@ -8,11 +8,10 @@ use std::sync::{Arc, Mutex};
 
 /// Function to add an error to a list of errors
 pub fn add_error(list_of_errors: &Arc<Mutex<Vec<String>>>, error: String) {
-    match list_of_errors.lock() {
-        Ok(mut errors) => errors.push(error),
-        Err(_) => {
-            // TODO: What to do here?
-        }
+    if let Ok(mut errors) = list_of_errors.lock() {
+        errors.push(error);
+    } else {
+        // TODO: What to do here?
     }
 }
 
@@ -28,6 +27,7 @@ pub fn calculate_hash(file_path: &Path) -> Result<Vec<u8>> {
     Ok(hasher.finalize().to_vec())
 }
 
+#[allow(dead_code)]
 pub struct AllowedPermissions {
     /// Whether the file or folder is readable
     pub read: bool,
@@ -37,6 +37,7 @@ pub struct AllowedPermissions {
 }
 
 /// Function to check the permissions of a file or folder
+#[allow(dead_code)]
 pub fn check_permissions(path: &Path, test_write: bool) -> Result<AllowedPermissions> {
     let read_permission: bool;
     let write_permission: bool;
@@ -85,14 +86,11 @@ pub fn check_permissions(path: &Path, test_write: bool) -> Result<AllowedPermiss
 
         if test_write && read_permission {
             // Try to write to the parent folder to check if it's writable
-            let parent_folder = match path.parent() {
-                Some(parent) => parent,
-                None => {
-                    return Err(Error::new(
-                        ErrorKind::NotFound,
-                        "Error getting parent folder",
-                    ))
-                }
+            let Some(parent_folder) = path.parent() else {
+                return Err(Error::new(
+                    ErrorKind::NotFound,
+                    "Error getting parent folder",
+                ));
             };
 
             let test_file = parent_folder.join(random_string);
@@ -132,6 +130,7 @@ pub fn confirm_continue() -> bool {
 }
 
 /// Function to round the size of a file or folder to a human-readable format
+#[allow(clippy::cast_precision_loss)]
 pub fn round_bytes_size(size: u64) -> String {
     let kb = 1024;
     let mb = kb * 1024;
@@ -139,7 +138,7 @@ pub fn round_bytes_size(size: u64) -> String {
     let tb = gb * 1024;
 
     if size < kb {
-        format!("{} B", size)
+        format!("{size} B")
     } else if size < mb {
         format!("{:.2} KB", size as f64 / kb as f64)
     } else if size < gb {

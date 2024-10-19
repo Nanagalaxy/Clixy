@@ -14,7 +14,7 @@ use std::{
 };
 
 #[derive(Args, Clone)]
-pub struct RemoveCommand {
+pub struct Command {
     #[arg(
         short,
         long,
@@ -54,8 +54,8 @@ pub struct RemoveCommand {
     content_only: bool,
 }
 
-pub fn execute_remove(cmd: RemoveCommand) {
-    let RemoveCommand {
+pub fn execute(cmd: Command) {
+    let Command {
         source,
         base: BaseCmdOpt { workers },
         only_files,
@@ -63,21 +63,19 @@ pub fn execute_remove(cmd: RemoveCommand) {
         content_only,
     } = cmd;
 
-    match rayon::ThreadPoolBuilder::new()
+    if rayon::ThreadPoolBuilder::new()
         .num_threads(workers)
         .build_global()
+        .is_err()
     {
-        Ok(_) => {}
-        Err(_) => {
-            eprintln!(
-                "Error setting the number of threads for rayon, using default value {}",
-                rayon::current_num_threads()
-            );
+        eprintln!(
+            "Error setting the number of threads for rayon, using default value {}",
+            rayon::current_num_threads()
+        );
 
-            if !confirm_continue() {
-                println!("Aborting remove");
-                return;
-            }
+        if !confirm_continue() {
+            println!("Aborting remove");
+            return;
         }
     }
 
@@ -88,10 +86,13 @@ pub fn execute_remove(cmd: RemoveCommand) {
     let ignore_flag = if only_files {
         IgnoreFlag::Directories
     } else {
-        IgnoreFlag::None
+        IgnoreFlag::default()
     };
 
-    if let Err(_) = path_content.index_entries(source_path, content_only, ignore_flag) {
+    if path_content
+        .index_entries(source_path, content_only, &ignore_flag)
+        .is_err()
+    {
         eprintln!("Error indexing source path, aborting remove");
         return;
     }
@@ -121,11 +122,11 @@ pub fn execute_remove(cmd: RemoveCommand) {
 
     let files_ok;
 
-    if !path_content.list_of_files.is_empty() {
-        files_ok = remove_files(&path_content, &list_of_errors);
-    } else {
+    if path_content.list_of_files.is_empty() {
         files_ok = true;
         println!("No files to remove");
+    } else {
+        files_ok = remove_files(&path_content, &list_of_errors);
     }
 
     if files_ok && !path_content.list_of_dirs.is_empty() {
@@ -134,12 +135,11 @@ pub fn execute_remove(cmd: RemoveCommand) {
         println!("No directories to remove or directories removal skipped");
     }
 
-    let list_of_errors = match Arc::try_unwrap(list_of_errors) {
-        Ok(list_of_errors) => list_of_errors.into_inner().unwrap_or(vec![]),
-        Err(_) => {
-            eprintln!("Error getting list of errors, somethings went wrong");
-            return;
-        }
+    let list_of_errors = if let Ok(list_of_errors) = Arc::try_unwrap(list_of_errors) {
+        list_of_errors.into_inner().unwrap_or(vec![])
+    } else {
+        eprintln!("Error getting list of errors, somethings went wrong");
+        return;
     };
 
     if list_of_errors.is_empty() {
@@ -157,7 +157,7 @@ pub fn execute_remove(cmd: RemoveCommand) {
             list_of_errors.len()
         );
         for error in list_of_errors {
-            eprintln!("- {}", error);
+            eprintln!("- {error}");
         }
     }
 }
@@ -167,6 +167,7 @@ pub fn execute_remove(cmd: RemoveCommand) {
 /// Note: because of the parallel processing, a flag protected by a mutex is used to track the status.
 /// At the end of the process, the mutex is unwrapped to get the final status. If an error with the mutex occurs,
 /// the function returns false.
+#[allow(clippy::module_name_repetitions)]
 pub fn remove_files(path_content: &PathContent, list_of_errors: &Arc<Mutex<Vec<String>>>) -> bool {
     let pb = progress_bar_helper::create_progress(path_content.list_of_files.len() as u64);
 
@@ -175,11 +176,10 @@ pub fn remove_files(path_content: &PathContent, list_of_errors: &Arc<Mutex<Vec<S
     let is_ok = Mutex::new(true);
 
     path_content.list_of_files.par_iter().for_each(|item| {
-        if let Err(_) = remove_file(item) {
-            add_error(list_of_errors, format!("Error removing file {:?}", item));
-            match is_ok.lock() {
-                Ok(mut is_ok) => *is_ok = false,
-                Err(_) => {}
+        if remove_file(item).is_err() {
+            add_error(list_of_errors, format!("Error removing file {item:?}"));
+            if let Ok(mut is_ok) = is_ok.lock() {
+                *is_ok = false;
             }
             return;
         }
@@ -192,6 +192,7 @@ pub fn remove_files(path_content: &PathContent, list_of_errors: &Arc<Mutex<Vec<S
     is_ok.into_inner().unwrap_or(false)
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub fn remove_dirs(
     path_content: &PathContent,
     list_of_errors: &Arc<Mutex<Vec<String>>>,
@@ -214,11 +215,8 @@ pub fn remove_dirs(
             }
         }
 
-        if let Err(_) = remove_dir(item) {
-            add_error(
-                list_of_errors,
-                format!("Error removing directory {:?}", item),
-            );
+        if remove_dir(item).is_err() {
+            add_error(list_of_errors, format!("Error removing directory {item:?}"));
             return;
         }
 

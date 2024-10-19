@@ -1,3 +1,4 @@
+#[allow(clippy::too_many_lines)]
 mod commands;
 mod path_content;
 mod progress_bar_helper;
@@ -6,9 +7,9 @@ mod utils;
 use clap::{crate_authors, crate_description, crate_version, Parser, Subcommand};
 
 use commands::{
-    copy::{execute_copy, CopyCommand},
-    r#move::{execute_move, MoveCommand},
-    remove::{execute_remove, RemoveCommand},
+    copy::{self},
+    r#move::{self},
+    remove::{self},
 };
 
 #[derive(Parser)]
@@ -21,15 +22,15 @@ struct ArgsCli {
 #[derive(Subcommand, Clone)]
 enum Commands {
     #[command(about = "Copy the source path to the destination path")]
-    Copy(CopyCommand),
+    Copy(copy::Command),
 
     #[command(about = "Remove the source path")]
-    Remove(RemoveCommand),
+    Remove(remove::Command),
 
     #[command(
         about = "Move the source path to the destination path. It's the same as copying the source path to the destination path and then removing the source path."
     )]
-    Move(MoveCommand),
+    Move(r#move::Command),
 }
 
 fn main() {
@@ -37,13 +38,13 @@ fn main() {
 
     match args.command {
         Commands::Copy(command) => {
-            execute_copy(command);
+            copy::execute(command);
         }
         Commands::Remove(command) => {
-            execute_remove(command);
+            remove::execute(command);
         }
         Commands::Move(command) => {
-            execute_move(command);
+            r#move::execute(command);
         }
     }
 }

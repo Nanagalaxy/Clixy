@@ -1,5 +1,5 @@
 use super::{
-    copy::{copy_dirs, copy_files, verify_copy, CopyTypesOptions},
+    copy::{copy_dirs, copy_files, verify_copy, OptionsTypes},
     remove::{remove_dirs, remove_files},
     BaseCmdOpt,
 };
@@ -14,7 +14,7 @@ use std::{
 };
 
 #[derive(Args, Clone)]
-pub struct MoveCommand {
+pub struct Command {
     #[arg(
         short,
         long,
@@ -37,28 +37,26 @@ pub struct MoveCommand {
     pub base: BaseCmdOpt,
 }
 
-pub fn execute_move(cmd: MoveCommand) {
-    let MoveCommand {
+pub fn execute(cmd: Command) {
+    let Command {
         source,
         destination,
         base: BaseCmdOpt { workers },
     } = cmd;
 
-    match rayon::ThreadPoolBuilder::new()
+    if rayon::ThreadPoolBuilder::new()
         .num_threads(workers)
         .build_global()
+        .is_err()
     {
-        Ok(_) => {}
-        Err(_) => {
-            eprintln!(
-                "Error setting the number of threads for rayon, using default value {}",
-                rayon::current_num_threads()
-            );
+        eprintln!(
+            "Error setting the number of threads for rayon, using default value {}",
+            rayon::current_num_threads()
+        );
 
-            if !confirm_continue() {
-                println!("Aborting move");
-                return;
-            }
+        if !confirm_continue() {
+            println!("Aborting move");
+            return;
         }
     }
 
@@ -69,7 +67,10 @@ pub fn execute_move(cmd: MoveCommand) {
 
     let into = false;
 
-    if let Err(_) = path_content.index_entries(source_path, into, IgnoreFlag::None) {
+    if path_content
+        .index_entries(source_path, into, &IgnoreFlag::default())
+        .is_err()
+    {
         eprintln!("Error indexing source path, aborting move");
         return;
     }
@@ -80,32 +81,30 @@ pub fn execute_move(cmd: MoveCommand) {
     }
 
     if destination_path.exists() {
-        let content = match destination_path.read_dir() {
-            Ok(content) => content,
-            Err(_) => {
-                eprintln!(
-                    "Error reading destination folder content, check the path or permissions"
-                );
-                return;
-            }
+        let Ok(content) = destination_path.read_dir() else {
+            eprintln!("Error reading destination folder content, check the path or permissions");
+            return;
         };
 
         if content.count() > 0 {
             eprintln!("Destination folder exists and is not empty, aborting move");
             return;
         }
+    } else if std::fs::create_dir_all(destination_path).is_err() {
+        eprintln!("Error creating destination path, aborting move");
+        return;
     } else {
-        if let Err(_) = std::fs::create_dir_all(destination_path) {
-            eprintln!("Error creating destination path, aborting move");
-            return;
-        }
+        println!("Destination path created");
     }
 
     let copy_list_of_errors = Arc::new(Mutex::new(vec![]));
 
     let dirs_ok;
 
-    if !path_content.list_of_dirs.is_empty() {
+    if path_content.list_of_dirs.is_empty() {
+        dirs_ok = true;
+        println!("No directories to move");
+    } else {
         dirs_ok = copy_dirs(
             &path_content,
             source_path,
@@ -113,13 +112,10 @@ pub fn execute_move(cmd: MoveCommand) {
             &copy_list_of_errors,
             into,
         );
-    } else {
-        dirs_ok = true;
-        println!("No directories to move");
     }
 
     if dirs_ok && !path_content.list_of_files.is_empty() {
-        let option = CopyTypesOptions::None;
+        let option = OptionsTypes::None;
 
         let copied_files = copy_files(
             &path_content,
@@ -131,18 +127,18 @@ pub fn execute_move(cmd: MoveCommand) {
         );
 
         // if !no_verify {
-        verify_copy(copied_files, &copy_list_of_errors);
+        verify_copy(&copied_files, &copy_list_of_errors);
         // }
     } else {
         println!("No files to move");
     }
 
-    let copy_list_of_errors = match Arc::try_unwrap(copy_list_of_errors) {
-        Ok(list_of_errors) => list_of_errors.into_inner().unwrap_or(vec![]),
-        Err(_) => {
-            eprintln!("Error getting list of errors, somethings went wrong");
-            return;
-        }
+    let copy_list_of_errors = if let Ok(copy_list_of_errors) = Arc::try_unwrap(copy_list_of_errors)
+    {
+        copy_list_of_errors.into_inner().unwrap_or(vec![])
+    } else {
+        eprintln!("Error getting list of errors, somethings went wrong");
+        return;
     };
 
     if copy_list_of_errors.is_empty() {
@@ -153,7 +149,7 @@ pub fn execute_move(cmd: MoveCommand) {
             copy_list_of_errors.len()
         );
         for error in copy_list_of_errors {
-            eprintln!("- {}", error);
+            eprintln!("- {error}");
         }
     }
 
@@ -161,10 +157,10 @@ pub fn execute_move(cmd: MoveCommand) {
 
     let mut files_ok = false;
 
-    if !path_content.list_of_files.is_empty() {
-        files_ok = remove_files(&path_content, &remove_list_of_errors);
-    } else {
+    if path_content.list_of_files.is_empty() {
         println!("No files to remove");
+    } else {
+        files_ok = remove_files(&path_content, &remove_list_of_errors);
     }
 
     // Add the source path to the list of directories to remove
@@ -181,13 +177,13 @@ pub fn execute_move(cmd: MoveCommand) {
         println!("No directories to remove");
     }
 
-    let remove_list_of_errors = match Arc::try_unwrap(remove_list_of_errors) {
-        Ok(list_of_errors) => list_of_errors.into_inner().unwrap_or(vec![]),
-        Err(_) => {
+    let remove_list_of_errors =
+        if let Ok(remove_list_of_errors) = Arc::try_unwrap(remove_list_of_errors) {
+            remove_list_of_errors.into_inner().unwrap_or(vec![])
+        } else {
             eprintln!("Error getting list of errors, somethings went wrong");
             return;
-        }
-    };
+        };
 
     if remove_list_of_errors.is_empty() {
         println!(
@@ -205,7 +201,7 @@ pub fn execute_move(cmd: MoveCommand) {
             remove_list_of_errors.len()
         );
         for error in remove_list_of_errors {
-            eprintln!("- {}", error);
+            eprintln!("- {error}");
         }
     }
 }

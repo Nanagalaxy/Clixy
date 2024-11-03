@@ -10,6 +10,7 @@ use commands::{
     copy::{self},
     r#move::{self},
     remove::{self},
+    FileCmd,
 };
 
 #[derive(Parser)]
@@ -21,30 +22,26 @@ struct ArgsCli {
 
 #[derive(Subcommand, Clone)]
 enum Commands {
-    #[command(about = "Copy the source path to the destination path")]
-    Copy(copy::Command),
-
-    #[command(about = "Remove the source path")]
-    Remove(remove::Command),
-
-    #[command(
-        about = "Move the source path to the destination path. It's the same as copying the source path to the destination path and then removing the source path."
-    )]
-    Move(r#move::Command),
+    #[cfg(feature = "file")]
+    #[clap(flatten)]
+    File(FileCmd),
 }
 
 fn main() {
     let args = ArgsCli::parse();
 
     match args.command {
-        Commands::Copy(command) => {
-            copy::execute(command);
-        }
-        Commands::Remove(command) => {
-            remove::execute(command);
-        }
-        Commands::Move(command) => {
-            r#move::execute(command);
-        }
+        #[cfg(feature = "file")]
+        Commands::File(command) => match command {
+            FileCmd::Copy(cmd) => {
+                copy::execute(cmd);
+            }
+            FileCmd::Remove(cmd) => {
+                remove::execute(cmd);
+            }
+            FileCmd::Move(cmd) => {
+                r#move::execute(cmd);
+            }
+        },
     }
 }

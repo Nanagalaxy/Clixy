@@ -378,7 +378,14 @@ pub fn copy_files(
             rel_path
         };
 
-        let destination_file = destination_path.join(relative_path);
+        let destination_file;
+
+        // Check if the relative path is not empty and join it with the destination path
+        if relative_path.to_str().unwrap_or_default().is_empty() {
+            destination_file = destination_path.to_path_buf();
+        } else {
+            destination_file = destination_path.join(relative_path);
+        }
 
         let need_copy = match option {
             OptionsTypes::None | OptionsTypes::Replace => true,

@@ -81,21 +81,30 @@ pub fn execute(cmd: Command) {
     }
 
     if destination_path.exists() {
-        let Ok(content) = destination_path.read_dir() else {
-            eprintln!("Error reading destination folder content, check the path or permissions");
-            return;
-        };
+        if destination_path.is_dir() {
+            let Ok(content) = destination_path.read_dir() else {
+                eprintln!(
+                    "Error reading destination folder content, check the path or permissions"
+                );
+                return;
+            };
 
-        if content.count() > 0 {
-            eprintln!("Destination folder exists and is not empty, aborting move");
+            if content.count() > 0 {
+                eprintln!("Destination folder exists and is not empty, aborting move");
+                return;
+            }
+        } else {
+            eprintln!("Destination path exists and is not a folder, aborting move");
             return;
         }
-    } else if std::fs::create_dir_all(destination_path).is_err() {
-        eprintln!("Error creating destination path, aborting move");
-        return;
-    } else {
-        println!("Destination path created");
-    }
+    } else if source_path.is_dir() {
+        if std::fs::create_dir_all(destination_path).is_err() {
+            eprintln!("Error creating destination path, aborting move");
+            return;
+        } else {
+            println!("Destination path created");
+        }
+    } // else, the file will be moved to the destination file during the copy phase
 
     let copy_list_of_errors = Arc::new(Mutex::new(vec![]));
 
@@ -151,6 +160,10 @@ pub fn execute(cmd: Command) {
         for error in copy_list_of_errors {
             eprintln!("- {error}");
         }
+
+        eprintln!("Aborting move");
+
+        return;
     }
 
     let remove_list_of_errors = Arc::new(Mutex::new(vec![]));
@@ -164,9 +177,10 @@ pub fn execute(cmd: Command) {
     }
 
     // Add the source path to the list of directories to remove
-    if !path_content
-        .list_of_dirs
-        .contains(&source_path.to_path_buf())
+    if source_path.is_dir()
+        && !path_content
+            .list_of_dirs
+            .contains(&source_path.to_path_buf())
     {
         path_content.list_of_dirs.push(source_path.to_path_buf());
     }

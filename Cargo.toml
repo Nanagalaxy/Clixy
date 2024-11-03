@@ -16,6 +16,9 @@ rand = "0.8.5"
 rayon = "1.10.0"
 sha2 = "0.10.8"
 
+[dev-dependencies]
+tempfile = "3.13.0"
+
 [[bin]]
 name = "clixy"
 path = "src/main.rs"

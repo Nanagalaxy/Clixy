@@ -1,3 +1,4 @@
 /target
+# contains files for testing file-related commands
 /test
 /.vscode

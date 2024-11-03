@@ -31,3 +31,13 @@ Because this project is still in development, please refer to the help command f
 ```sh
 clixy --help
 ```
+
+## Testing
+
+To run the tests, execute the following command:
+
+```sh
+cargo test
+```
+
+Note: The `tests` folder contains integration tests. The `test` folder (with no `s`) contains only random files to test commands requiring files like `copy`.

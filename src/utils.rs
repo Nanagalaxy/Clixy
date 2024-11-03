@@ -27,6 +27,36 @@ pub fn calculate_hash(file_path: &Path) -> Result<Vec<u8>> {
     Ok(hasher.finalize().to_vec())
 }
 
+#[test]
+fn test_calculate_hash_same() {
+    let test_file1 = Path::new("Cargo.toml");
+    let test_file2 = Path::new("Cargo.toml");
+
+    let hash1 = calculate_hash(test_file1).unwrap();
+    let hash2 = calculate_hash(test_file2).unwrap();
+
+    assert_eq!(hash1, hash2);
+}
+
+#[test]
+fn test_calculate_hash_diff() {
+    let test_file1 = Path::new("Cargo.toml");
+    let test_file2 = Path::new("Cargo.lock");
+
+    let hash1 = calculate_hash(test_file1).unwrap();
+    let hash2 = calculate_hash(test_file2).unwrap();
+
+    assert_ne!(hash1, hash2);
+}
+
+#[test]
+#[should_panic(expected = "kind: NotFound")]
+fn test_calculate_hash_no_file() {
+    let test_file = Path::new("non_existent_file");
+
+    let _ = calculate_hash(test_file).unwrap();
+}
+
 #[allow(dead_code)]
 pub struct AllowedPermissions {
     /// Whether the file or folder is readable
@@ -148,4 +178,14 @@ pub fn round_bytes_size(size: u64) -> String {
     } else {
         format!("{:.2} TB", size as f64 / tb as f64)
     }
+}
+
+#[test]
+fn test_round_bytes_size() {
+    assert_eq!(round_bytes_size(0), "0 B");
+    assert_eq!(round_bytes_size(1023), "1023 B");
+    assert_eq!(round_bytes_size(1024), "1.00 KB");
+    assert_eq!(round_bytes_size(1024 * 1024), "1.00 MB");
+    assert_eq!(round_bytes_size(1024 * 1024 * 1024), "1.00 GB");
+    assert_eq!(round_bytes_size(1024 * 1024 * 1024 * 1024), "1.00 TB");
 }

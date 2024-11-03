@@ -18,6 +18,9 @@ pub struct PathContent {
 
     /// A list of files in the path
     pub list_of_files: Vec<PathBuf>,
+
+    // Indicates if the index has been created or not
+    indexed: bool,
 }
 
 #[derive(Debug, Default)]
@@ -35,10 +38,20 @@ impl PathContent {
             size: 0,
             list_of_dirs: vec![],
             list_of_files: vec![],
+            indexed: false,
         }
     }
 
     pub fn index_entries(&mut self, path: &Path, into: bool, ignore: &IgnoreFlag) -> Result<()> {
+        if self.indexed {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "The path content has already been indexed",
+            ));
+        }
+
+        self.indexed = true;
+
         let pb = progress_bar_helper::create_spinner();
 
         pb.set_message(format!("Indexing entries: {}", self.entries));
@@ -47,15 +60,20 @@ impl PathContent {
             // The source path will be copied directly into the destination path
             vec![path.to_path_buf()]
         } else {
-            // The contents of the source path will be copied into the destination path
-            path.read_dir()?
-                .par_bridge()
-                .filter_map(|entry| {
-                    let entry = entry.ok()?;
-                    let path = entry.path();
-                    Some(path)
-                })
-                .collect()
+            if path.is_dir() {
+                // The contents of the source path will be copied into the destination path
+                path.read_dir()?
+                    .par_bridge()
+                    .filter_map(|entry| {
+                        let entry = entry.ok()?;
+                        let path = entry.path();
+                        Some(path)
+                    })
+                    .collect()
+            } else {
+                // For a file, we only need to copy the file itself
+                vec![path.to_path_buf()]
+            }
         };
 
         while let Some(item) = list_to_explore.pop() {
@@ -118,4 +136,43 @@ impl PathContent {
         self.entries += 1;
         pb.set_message(format!("Indexing entries: {}", self.entries));
     }
+}
+
+#[test]
+fn test_index_entries_file() {
+    let mut path_content = PathContent::new();
+
+    path_content
+        .index_entries(Path::new("Cargo.toml"), true, &IgnoreFlag::None)
+        .unwrap();
+
+    assert_eq!(path_content.entries, 1);
+    assert_eq!(path_content.list_of_files.len(), 1);
+    assert_eq!(path_content.list_of_dirs.len(), 0);
+}
+
+#[test]
+fn test_index_entries_ignore_files() {
+    let mut path_content = PathContent::new();
+
+    path_content
+        .index_entries(Path::new("Cargo.toml"), true, &IgnoreFlag::Files)
+        .unwrap();
+
+    assert_eq!(path_content.entries, 0);
+    assert_eq!(path_content.list_of_files.len(), 0);
+    assert_eq!(path_content.list_of_dirs.len(), 0);
+}
+
+#[test]
+fn test_index_entries_ignore_dirs() {
+    let mut path_content = PathContent::new();
+
+    path_content
+        .index_entries(Path::new("Cargo.toml"), true, &IgnoreFlag::Directories)
+        .unwrap();
+
+    assert_eq!(path_content.entries, 1);
+    assert_eq!(path_content.list_of_files.len(), 1);
+    assert_eq!(path_content.list_of_dirs.len(), 0);
 }

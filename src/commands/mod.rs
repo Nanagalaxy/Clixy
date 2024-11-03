@@ -29,3 +29,26 @@ pub enum FileCmd {
     )]
     Move(r#move::Command),
 }
+
+#[derive(Args, Clone)]
+pub struct DescribeCmd {
+    #[arg(
+        short,
+        long,
+        required = true,
+        value_parser = builder::NonEmptyStringValueParser::new(),
+        help = "The feature to describe."
+    )]
+    feature: String,
+}
+
+impl DescribeCmd {
+    pub fn execute(&self) {
+        match self.feature.to_lowercase().as_str() {
+            "describe" => println!("This feature gives access to the `describe` command, which allows you to describe a feature (you are using it right now)."),
+            "file" => println!("This feature gives access to the `copy`, `remove`, and `move` commands, which allow you to copy, remove, and move files, respectively."),
+            // "random" => println!("This feature gives access to the `random` command, which allows you to generate random numbers."),
+            _ => println!("The feature '{}' is not yet available.", self.feature),
+        }
+    }
+}

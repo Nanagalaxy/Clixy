@@ -1,10 +1,11 @@
 [package]
 name = "clixy"
 description = "A CLI tool."
-version = "0.8.0"
+version = "0.8.1"
 edition = "2021"
 readme = "README.md"
 repository = "https://github.com/Nanagalaxy/Clixy"
+authors = ["Naexy"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -24,4 +25,7 @@ name = "clixy"
 path = "src/main.rs"
 
 [features]
+default = ["describe"]
+describe = []
 file = []
+random = []

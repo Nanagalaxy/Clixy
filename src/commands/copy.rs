@@ -311,7 +311,7 @@ pub fn copy_dirs(
 
         let destination_dir = destination_path.join(relative_path);
 
-        // Do the copy of the director&ies
+        // Do the copy of the directories
         if let Err(e) = create_dir_all(&destination_dir) {
             add_error(
                 list_of_errors,

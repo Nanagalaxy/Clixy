@@ -4,13 +4,11 @@ use crate::progress_bar_helper;
 use crate::utils::{add_error, confirm_continue, round_bytes_size};
 use clap::{builder, ArgAction, Args};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use std::fs::remove_dir;
 use std::{
-    fs::remove_file,
+    collections::BTreeMap,
+    fs::{remove_dir, remove_file},
     path::Path,
     sync::{Arc, Mutex},
-    thread,
-    time::Duration,
 };
 
 #[derive(Args, Clone)]
@@ -202,17 +200,47 @@ pub fn remove_dirs(
 
     pb.set_message("Removing directories");
 
-    path_content.list_of_dirs.par_iter().for_each(|item| {
-        // Check if the source path is in the list of directories
-        if item == source_path {
-            // Wait util the source path is empty before removing it
-            while let Ok(content) = source_path.read_dir() {
-                if content.count() == 0 {
-                    break;
-                }
+    let mut dirs_by_depth = BTreeMap::new();
 
-                thread::sleep(Duration::from_millis(100));
+    for dir in &path_content.list_of_dirs {
+        let depth = match dir.strip_prefix(source_path) {
+            Ok(stripped) => stripped.components().count(),
+            Err(_) => {
+                add_error(
+                    list_of_errors,
+                    format!("Error stripping prefix from {dir:?}"),
+                );
+                continue;
             }
+        };
+
+        dirs_by_depth
+            .entry(depth)
+            .or_insert_with(Vec::new)
+            .push(dir.to_path_buf());
+    }
+
+    // Remove directories by depth, starting from the deepest
+    for (depth, dirs) in dirs_by_depth.iter().rev() {
+        dirs.par_iter().for_each(|item| {
+            if remove_dir(item).is_err() {
+                add_error(
+                    list_of_errors,
+                    format!("Error removing directory {item:?} at depth {depth}"),
+                );
+                return;
+            }
+
+            pb.inc(1);
+        });
+    }
+
+    /*
+    path_content.list_of_dirs.par_iter().for_each(|item| {
+        // Check if the source path is in the list of directories and skip it
+        // The source path will be removed at the end of the process if it's empty
+        if item == source_path {
+            return;
         }
 
         if remove_dir(item).is_err() {
@@ -223,5 +251,36 @@ pub fn remove_dirs(
         pb.inc(1);
     });
 
+    // At the end of the process, check:
+    // - if the source path is in the list of directories
+    // - if the source path is empty
+    // And remove it if it's the case
+    if path_content
+        .list_of_dirs
+        .contains(&source_path.to_path_buf())
+    {
+        match source_path.read_dir() {
+            Ok(content) => {
+                if content.count() == 0 && remove_dir(source_path).is_err() {
+                    add_error(
+                        list_of_errors,
+                        format!("Error removing source path {source_path:?}"),
+                    );
+                } else {
+                    add_error(
+                        list_of_errors,
+                        format!("Cannot remove source path {source_path:?} because it's not empty"),
+                    );
+                }
+            }
+            Err(error) => {
+                add_error(
+                    list_of_errors,
+                    format!("Error reading source path {source_path:?} : {error}"),
+                );
+            }
+        }
+    }
+    */
     pb.finish_with_message("Directories removed");
 }

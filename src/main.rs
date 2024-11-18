@@ -7,10 +7,8 @@ mod utils;
 use clap::{crate_authors, crate_description, crate_version, Parser, Subcommand};
 
 use commands::{
-    copy::{self},
-    r#move::{self},
-    remove::{self},
-    DescribeCmd, FileCmd,
+    file::{copy, r#move, remove, FileCmd},
+    DescribeCmd,
 };
 
 #[derive(Parser)]

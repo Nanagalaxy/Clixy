@@ -1,4 +1,4 @@
-use super::BaseCmdOpt;
+use crate::commands::BaseCmdOpt;
 use crate::path_content::{IgnoreFlag, PathContent};
 use crate::progress_bar_helper;
 use crate::utils::{add_error, confirm_continue, round_bytes_size};

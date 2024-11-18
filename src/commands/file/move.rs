@@ -1,8 +1,8 @@
-use super::{
+use crate::commands::file::{
     copy::{copy_dirs, copy_files, verify_copy, OptionsTypes},
     remove::{remove_dirs, remove_files},
-    BaseCmdOpt,
 };
+use crate::commands::BaseCmdOpt;
 use crate::{
     path_content::{IgnoreFlag, PathContent},
     utils::{confirm_continue, round_bytes_size},

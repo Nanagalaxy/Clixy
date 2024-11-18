@@ -135,6 +135,7 @@ pub fn execute(cmd: Command) {
             &option,
         );
 
+        // TODO : add a flag to skip the verification
         // if !no_verify {
         verify_copy(&copied_files, &copy_list_of_errors);
         // }

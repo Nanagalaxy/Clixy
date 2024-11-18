@@ -506,6 +506,7 @@ pub fn verify_copy(
                         "Hashes don't match for files {source_file:?} and {destination_file:?}"
                     ),
                 );
+                return;
             }
 
             pb.inc(1);

@@ -59,21 +59,19 @@ impl PathContent {
         let mut list_to_explore = if into {
             // The source path will be copied directly into the destination path
             vec![path.to_path_buf()]
+        } else if path.is_dir() {
+            // The contents of the source path will be copied into the destination path
+            path.read_dir()?
+                .par_bridge()
+                .filter_map(|entry| {
+                    let entry = entry.ok()?;
+                    let path = entry.path();
+                    Some(path)
+                })
+                .collect()
         } else {
-            if path.is_dir() {
-                // The contents of the source path will be copied into the destination path
-                path.read_dir()?
-                    .par_bridge()
-                    .filter_map(|entry| {
-                        let entry = entry.ok()?;
-                        let path = entry.path();
-                        Some(path)
-                    })
-                    .collect()
-            } else {
-                // For a file, we only need to copy the file itself
-                vec![path.to_path_buf()]
-            }
+            // For a file, we only need to copy the file itself
+            vec![path.to_path_buf()]
         };
 
         while let Some(item) = list_to_explore.pop() {

@@ -45,10 +45,10 @@ pub struct DescribeCmd {
 impl DescribeCmd {
     pub fn execute(&self) {
         match self.feature.to_lowercase().as_str() {
-            "describe" => println!("This feature gives access to the `describe` command, which allows you to describe a feature (you are using it right now)."),
-            "file" => println!("This feature gives access to the `copy`, `remove`, and `move` commands, which allow you to copy, remove, and move files, respectively."),
+            "describe" => println!("This feature provides access to the describe command, which allows you to get detailed information about other features. (You're using it right now!)"),
+            "file" => println!("This feature provides access to the copy, remove, and move commands. These commands allow you to copy, remove, or move files, giving you control over file management."),
             // "random" => println!("This feature gives access to the `random` command, which allows you to generate random numbers."),
-            _ => println!("The feature '{}' is not yet available.", self.feature),
+            _ => println!("The feature '{}' is not available or is not yet implemented.", self.feature),
         }
     }
 }

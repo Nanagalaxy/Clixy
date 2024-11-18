@@ -8,6 +8,7 @@ use clap::{crate_authors, crate_description, crate_version, Parser, Subcommand};
 
 use commands::{
     file::{copy, r#move, remove, FileCmd},
+    random::RandomCmd,
     DescribeCmd,
 };
 
@@ -60,6 +61,10 @@ enum Commands {
     #[cfg(feature = "file")]
     #[clap(flatten)]
     File(FileCmd),
+
+    #[cfg(feature = "random")]
+    #[command(subcommand)]
+    Random(RandomCmd),
 }
 
 fn main() {
@@ -80,6 +85,15 @@ fn main() {
             }
             FileCmd::Move(cmd) => {
                 r#move::execute(cmd);
+            }
+        },
+        #[cfg(feature = "random")]
+        Commands::Random(command) => match command {
+            RandomCmd::String(command) => {
+                command.execute();
+            }
+            RandomCmd::Number(command) => {
+                command.execute();
             }
         },
     }

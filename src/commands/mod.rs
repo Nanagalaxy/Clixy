@@ -1,10 +1,7 @@
 use clap::{builder, Args};
 
 pub mod file;
-
-// pub mod copy;
-// pub mod r#move;
-// pub mod remove;
+pub mod random;
 
 /// A struct that holds the options available for all commands.
 #[derive(Args, Clone)]
@@ -35,7 +32,7 @@ impl DescribeCmd {
         match self.feature.to_lowercase().as_str() {
             "describe" => println!("This feature provides access to the describe command, which allows you to get detailed information about other features. (You're using it right now!)"),
             "file" => println!("This feature provides access to the copy, remove, and move commands. These commands allow you to copy, remove, or move files, giving you control over file management."),
-            // "random" => println!("This feature gives access to the `random` command, which allows you to generate random numbers."),
+            "random" => println!("This feature provides access to the random command, allowing you to generate random numbers, strings, and more."),
             _ => println!("The feature '{}' is not available or is not yet implemented.", self.feature),
         }
     }

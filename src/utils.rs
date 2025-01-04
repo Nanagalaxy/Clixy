@@ -1,6 +1,5 @@
 use rand::distributions::{Alphanumeric, DistString};
 use rand::thread_rng;
-use sha2::{Digest, Sha256};
 use std::fs::{read_dir, File};
 use std::io::{Error, ErrorKind, Read, Result};
 use std::path::Path;
@@ -15,8 +14,35 @@ pub fn add_error(list_of_errors: &Arc<Mutex<Vec<String>>>, error: String) {
     }
 }
 
-/// Function for calculating the SHA-256 hash of a file
-pub fn calculate_hash(file_path: &Path) -> Result<Vec<u8>> {
+pub fn calculate_hash_md5(file_path: &Path) -> Result<Vec<u8>> {
+    use md5::{Digest, Md5};
+
+    let mut file = File::open(file_path)?;
+    let mut hasher = Md5::new();
+    let mut buffer = Vec::new();
+
+    file.read_to_end(&mut buffer)?;
+    hasher.update(&buffer);
+
+    Ok(hasher.finalize().to_vec())
+}
+
+pub fn calculate_hash_sha1(file_path: &Path) -> Result<Vec<u8>> {
+    use sha1::{Digest, Sha1};
+
+    let mut file = File::open(file_path)?;
+    let mut hasher = Sha1::new();
+    let mut buffer = Vec::new();
+
+    file.read_to_end(&mut buffer)?;
+    hasher.update(&buffer);
+
+    Ok(hasher.finalize().to_vec())
+}
+
+pub fn calculate_hash_sha2_256(file_path: &Path) -> Result<Vec<u8>> {
+    use sha2::{Digest, Sha256};
+
     let mut file = File::open(file_path)?;
     let mut hasher = Sha256::new();
     let mut buffer = Vec::new();
@@ -27,34 +53,73 @@ pub fn calculate_hash(file_path: &Path) -> Result<Vec<u8>> {
     Ok(hasher.finalize().to_vec())
 }
 
+pub fn calculate_hash_sha2_512(file_path: &Path) -> Result<Vec<u8>> {
+    use sha2::{Digest, Sha512};
+
+    let mut file = File::open(file_path)?;
+    let mut hasher = Sha512::new();
+    let mut buffer = Vec::new();
+
+    file.read_to_end(&mut buffer)?;
+    hasher.update(&buffer);
+
+    Ok(hasher.finalize().to_vec())
+}
+
+pub fn calculate_hash_sha3_256(file_path: &Path) -> Result<Vec<u8>> {
+    use sha3::{Digest, Sha3_256};
+
+    let mut file = File::open(file_path)?;
+    let mut hasher = Sha3_256::new();
+    let mut buffer = Vec::new();
+
+    file.read_to_end(&mut buffer)?;
+    hasher.update(&buffer);
+
+    Ok(hasher.finalize().to_vec())
+}
+
+pub fn calculate_hash_sha3_512(file_path: &Path) -> Result<Vec<u8>> {
+    use sha3::{Digest, Sha3_512};
+
+    let mut file = File::open(file_path)?;
+    let mut hasher = Sha3_512::new();
+    let mut buffer = Vec::new();
+
+    file.read_to_end(&mut buffer)?;
+    hasher.update(&buffer);
+
+    Ok(hasher.finalize().to_vec())
+}
+
 #[test]
-fn test_calculate_hash_same() {
+fn test_calculate_hash_sha2_256_same() {
     let test_file1 = Path::new("Cargo.toml");
     let test_file2 = Path::new("Cargo.toml");
 
-    let hash1 = calculate_hash(test_file1).unwrap();
-    let hash2 = calculate_hash(test_file2).unwrap();
+    let hash1 = calculate_hash_sha2_256(test_file1).unwrap();
+    let hash2 = calculate_hash_sha2_256(test_file2).unwrap();
 
     assert_eq!(hash1, hash2);
 }
 
 #[test]
-fn test_calculate_hash_diff() {
+fn test_calculate_hash_sha2_256_diff() {
     let test_file1 = Path::new("Cargo.toml");
     let test_file2 = Path::new("Cargo.lock");
 
-    let hash1 = calculate_hash(test_file1).unwrap();
-    let hash2 = calculate_hash(test_file2).unwrap();
+    let hash1 = calculate_hash_sha2_256(test_file1).unwrap();
+    let hash2 = calculate_hash_sha2_256(test_file2).unwrap();
 
     assert_ne!(hash1, hash2);
 }
 
 #[test]
 #[should_panic(expected = "kind: NotFound")]
-fn test_calculate_hash_no_file() {
+fn test_calculate_hash_sha2_256_no_file() {
     let test_file = Path::new("non_existent_file");
 
-    let _ = calculate_hash(test_file).unwrap();
+    let _ = calculate_hash_sha2_256(test_file).unwrap();
 }
 
 #[allow(dead_code)]

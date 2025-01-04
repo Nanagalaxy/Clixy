@@ -1,7 +1,7 @@
 use crate::commands::BaseCmdOpt;
 use crate::path_content::{IgnoreFlag, PathContent};
 use crate::progress_bar_helper;
-use crate::utils::{add_error, calculate_hash, confirm_continue, round_bytes_size};
+use crate::utils::{add_error, calculate_hash_sha2_256, confirm_continue, round_bytes_size};
 use clap::{builder, Args};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs::{copy, create_dir_all};
@@ -483,7 +483,7 @@ pub fn verify_copy(
     copied_files
         .par_iter()
         .for_each(|(source_file, destination_file)| {
-            let Ok(source_hash) = calculate_hash(source_file) else {
+            let Ok(source_hash) = calculate_hash_sha2_256(source_file) else {
                 add_error(
                     list_of_errors,
                     format!("Error calculating hash for source file {source_file:?}"),
@@ -491,7 +491,7 @@ pub fn verify_copy(
                 return;
             };
 
-            let Ok(destination_hash) = calculate_hash(destination_file) else {
+            let Ok(destination_hash) = calculate_hash_sha2_256(destination_file) else {
                 add_error(
                     list_of_errors,
                     format!("Error calculating hash for destination file {destination_file:?}"),

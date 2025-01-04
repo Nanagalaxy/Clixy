@@ -59,7 +59,7 @@ enum Commands {
     Describe(DescribeCmd),
 
     #[cfg(feature = "file")]
-    #[clap(flatten)]
+    #[command(subcommand)]
     File(FileCmd),
 
     #[cfg(feature = "random")]

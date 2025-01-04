@@ -20,8 +20,9 @@ fn copy() {
 
     let bin_path = Path::new(env!("CARGO_BIN_EXE_clixy"));
 
-    // clixy copy -s src_path -d dest_path
+    // clixy file copy -s src_path -d dest_path
     Command::new(bin_path)
+        .arg("file")
         .arg("copy")
         .arg("-s")
         .arg(src_path)
@@ -59,8 +60,9 @@ fn remove() {
 
     let bin_path = Path::new(env!("CARGO_BIN_EXE_clixy"));
 
-    // clixy remove -s path -y --only-files
+    // clixy file remove -s path -y --only-files
     Command::new(bin_path)
+        .arg("file")
         .arg("remove")
         .arg("-s")
         .arg(path)
@@ -91,8 +93,9 @@ fn move_file() {
 
     let bin_path = Path::new(env!("CARGO_BIN_EXE_clixy"));
 
-    // clixy move -s src_file_path -d dest_file_path
+    // clixy file move -s src_file_path -d dest_file_path
     Command::new(bin_path)
+        .arg("file")
         .arg("move")
         .arg("-s")
         .arg(&src_file_path)

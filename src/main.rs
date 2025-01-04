@@ -86,6 +86,9 @@ fn main() {
             FileCmd::Move(cmd) => {
                 r#move::execute(cmd);
             }
+            FileCmd::Hash(command) => {
+                command.execute();
+            }
         },
         #[cfg(feature = "random")]
         Commands::Random(command) => match command {

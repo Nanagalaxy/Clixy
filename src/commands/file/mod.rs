@@ -3,6 +3,7 @@ use clap::Subcommand;
 pub mod copy;
 pub mod r#move;
 pub mod remove;
+pub mod hash;
 
 #[derive(Subcommand, Clone)]
 #[command(about = "File operations", visible_aliases = &["f"])]
@@ -18,4 +19,7 @@ pub enum FileCmd {
         visible_aliases = &["mv"]
     )]
     Move(r#move::Command),
+
+    #[command(about = "Hash the source path", visible_aliases = &["h"])]
+    Hash(hash::Command),
 }

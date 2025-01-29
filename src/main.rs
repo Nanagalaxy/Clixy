@@ -39,13 +39,8 @@ impl ArgsCli {
             .unwrap_or(0);
 
         let mut help_text = String::from("Enabled features:\n");
-        for (feature, enabled) in features.iter() {
-            help_text.push_str(&format!(
-                "    {:<width$} {}\n",
-                feature,
-                enabled,
-                width = max_lenght
-            ));
+        for (feature, enabled) in &features {
+            help_text.push_str(&format!("    {feature:<max_lenght$} {enabled}\n"));
         }
 
         help_text

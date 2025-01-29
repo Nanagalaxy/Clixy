@@ -1,5 +1,8 @@
 use clap::{builder, Args};
-use rand::distributions::{Distribution, Uniform};
+use rand::{
+    distr::{Distribution, Uniform},
+    rng,
+};
 
 #[derive(Args, Clone)]
 pub struct Command {
@@ -45,8 +48,12 @@ impl Command {
             return;
         }
 
-        let range = Uniform::new_inclusive(self.min, self.max);
-        let mut rng = rand::thread_rng();
+        let Ok(range) = Uniform::new_inclusive(self.min, self.max) else {
+            eprintln!("Error creating the random number generator.");
+            return;
+        };
+
+        let mut rng = rng();
 
         for i in 0..self.repeat {
             print!("{}", range.sample(&mut rng));

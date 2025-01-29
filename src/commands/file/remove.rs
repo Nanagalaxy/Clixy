@@ -203,21 +203,21 @@ pub fn remove_dirs(
     let mut dirs_by_depth = BTreeMap::new();
 
     for dir in &path_content.list_of_dirs {
-        let depth = match dir.strip_prefix(source_path) {
-            Ok(stripped) => stripped.components().count(),
-            Err(_) => {
-                add_error(
-                    list_of_errors,
-                    format!("Error stripping prefix from {dir:?}"),
-                );
-                continue;
-            }
+        let Ok(depth) = dir
+            .strip_prefix(source_path)
+            .map(|stripped| stripped.components().count())
+        else {
+            add_error(
+                list_of_errors,
+                format!("Error stripping prefix from {dir:?}"),
+            );
+            continue;
         };
 
         dirs_by_depth
             .entry(depth)
             .or_insert_with(Vec::new)
-            .push(dir.to_path_buf());
+            .push(dir);
     }
 
     // Remove directories by depth, starting from the deepest
@@ -235,52 +235,5 @@ pub fn remove_dirs(
         });
     }
 
-    /*
-    path_content.list_of_dirs.par_iter().for_each(|item| {
-        // Check if the source path is in the list of directories and skip it
-        // The source path will be removed at the end of the process if it's empty
-        if item == source_path {
-            return;
-        }
-
-        if remove_dir(item).is_err() {
-            add_error(list_of_errors, format!("Error removing directory {item:?}"));
-            return;
-        }
-
-        pb.inc(1);
-    });
-
-    // At the end of the process, check:
-    // - if the source path is in the list of directories
-    // - if the source path is empty
-    // And remove it if it's the case
-    if path_content
-        .list_of_dirs
-        .contains(&source_path.to_path_buf())
-    {
-        match source_path.read_dir() {
-            Ok(content) => {
-                if content.count() == 0 && remove_dir(source_path).is_err() {
-                    add_error(
-                        list_of_errors,
-                        format!("Error removing source path {source_path:?}"),
-                    );
-                } else {
-                    add_error(
-                        list_of_errors,
-                        format!("Cannot remove source path {source_path:?} because it's not empty"),
-                    );
-                }
-            }
-            Err(error) => {
-                add_error(
-                    list_of_errors,
-                    format!("Error reading source path {source_path:?} : {error}"),
-                );
-            }
-        }
-    }
-    */
     pb.finish_with_message("Directories removed");
 }

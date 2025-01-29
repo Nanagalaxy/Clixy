@@ -57,8 +57,8 @@ impl Command {
     pub fn execute(&self) {
         let source_path = Path::new(&self.source);
 
-        if !source_path.exists() {
-            eprintln!("The source path does not exist.");
+        if !source_path.exists() || !source_path.is_file() {
+            eprintln!("The source path does not exist or is not a file.");
             return;
         }
 
@@ -78,6 +78,6 @@ impl Command {
             Err(_) => "Error calculating hash.".to_string(),
         };
 
-        println!("{}", result_string);
+        println!("{result_string}");
     }
 }

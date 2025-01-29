@@ -101,9 +101,8 @@ pub fn execute(cmd: Command) {
         if std::fs::create_dir_all(destination_path).is_err() {
             eprintln!("Error creating destination path, aborting move");
             return;
-        } else {
-            println!("Destination path created");
         }
+        println!("Destination path created");
     } // else, the file will be moved to the destination file during the copy phase
 
     let copy_list_of_errors = Arc::new(Mutex::new(vec![]));

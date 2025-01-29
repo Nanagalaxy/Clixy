@@ -1,5 +1,8 @@
 use clap::{builder, Args, ValueEnum};
-use rand::distributions::{Alphanumeric, DistString, Distribution, Uniform};
+use rand::{
+    distr::{Alphanumeric, Distribution, SampleString, Uniform},
+    rng,
+};
 
 #[derive(ValueEnum, Clone, PartialEq)]
 enum Charset {
@@ -34,18 +37,15 @@ pub struct Command {
 
 impl Command {
     pub fn execute(&self) {
-        if self.charsets.is_empty() {
-            println!(
-                "{}",
-                Alphanumeric.sample_string(&mut rand::thread_rng(), self.size)
-            );
-            return;
-        }
-
         static LOWERCASE: &str = "abcdefghijklmnopqrstuvwxyz";
         static UPPERCASE: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         static NUMERIC: &str = "0123456789";
         static SPECIAL: &str = r##"!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~"##;
+
+        if self.charsets.is_empty() {
+            println!("{}", Alphanumeric.sample_string(&mut rng(), self.size));
+            return;
+        }
 
         let mut charset = String::new();
 
@@ -67,8 +67,12 @@ impl Command {
 
         let charset = charset.as_bytes();
 
-        let range = Uniform::new(0, charset.len());
-        let mut rng = rand::thread_rng();
+        let Ok(range) = Uniform::new(0, charset.len()) else {
+            eprintln!("Failed to create random generator.");
+            return;
+        };
+
+        let mut rng = rng();
 
         for _ in 0..self.size {
             print!("{}", charset[range.sample(&mut rng)] as char);

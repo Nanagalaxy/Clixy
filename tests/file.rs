@@ -55,8 +55,8 @@ fn remove() {
     // Close the file to release the lock
     drop(file);
 
-    println!("path: {:?}", path);
-    println!("file_path: {:?}", file_path);
+    println!("path: {path:?}");
+    println!("file_path: {file_path:?}");
 
     let bin_path = Path::new(env!("CARGO_BIN_EXE_clixy"));
 

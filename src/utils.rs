@@ -1,5 +1,5 @@
-use rand::distributions::{Alphanumeric, DistString};
-use rand::thread_rng;
+use rand::distr::{Alphanumeric, SampleString};
+use rand::rng;
 use std::fs::{read_dir, File};
 use std::io::{Error, ErrorKind, Read, Result};
 use std::path::Path;
@@ -138,7 +138,7 @@ pub fn check_permissions(path: &Path, test_write: bool) -> Result<AllowedPermiss
     let write_permission: bool;
 
     // Create a random string to test write permissions
-    let random_string = Alphanumeric.sample_string(&mut thread_rng(), 20);
+    let random_string = Alphanumeric.sample_string(&mut rng(), 20);
 
     // Check if path is a file or folder
     if path.is_dir() {

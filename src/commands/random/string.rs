@@ -4,6 +4,8 @@ use rand::{
     rng,
 };
 
+use crate::utils::alphabet::{ALPHABET_LOWER, ALPHABET_UPPER, NUMERIC, SPECIAL};
+
 #[derive(ValueEnum, Clone, PartialEq)]
 enum Charset {
     Lower,
@@ -37,24 +39,19 @@ pub struct Command {
 
 impl Command {
     pub fn execute(&self) {
-        static LOWERCASE: &str = "abcdefghijklmnopqrstuvwxyz";
-        static UPPERCASE: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        static NUMERIC: &str = "0123456789";
-        static SPECIAL: &str = r##"!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~"##;
-
         if self.charsets.is_empty() {
             println!("{}", Alphanumeric.sample_string(&mut rng(), self.size));
             return;
         }
 
-        let mut charset = String::new();
+        let mut charset = Vec::new();
 
         for c in &self.charsets {
             match c {
-                Charset::Lower => charset.push_str(LOWERCASE),
-                Charset::Upper => charset.push_str(UPPERCASE),
-                Charset::Numeric => charset.push_str(NUMERIC),
-                Charset::Special => charset.push_str(SPECIAL),
+                Charset::Lower => charset.extend(ALPHABET_LOWER),
+                Charset::Upper => charset.extend(ALPHABET_UPPER),
+                Charset::Numeric => charset.extend(NUMERIC),
+                Charset::Special => charset.extend(SPECIAL),
             }
         }
 
@@ -64,8 +61,6 @@ impl Command {
             );
             return;
         }
-
-        let charset = charset.as_bytes();
 
         let Ok(range) = Uniform::new(0, charset.len()) else {
             eprintln!("Failed to create random generator.");

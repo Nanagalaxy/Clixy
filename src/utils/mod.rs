@@ -1,3 +1,4 @@
+pub mod alphabet;
 pub mod hash;
 
 use rand::distr::{Alphanumeric, SampleString};

@@ -81,6 +81,9 @@ fn main() {
             CryptoCmd::Hash(command) => {
                 command.execute();
             }
+            CryptoCmd::Caesar(command) => {
+                command.execute();
+            }
         },
         #[cfg(feature = "file")]
         Commands::File(command) => match command {

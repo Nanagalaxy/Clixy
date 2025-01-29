@@ -1,7 +1,7 @@
 use crate::commands::BaseCmdOpt;
 use crate::path_content::{IgnoreFlag, PathContent};
 use crate::progress_bar_helper;
-use crate::utils::utils::{add_error, confirm_continue, round_bytes_size};
+use crate::utils::{add_error, confirm_continue, round_bytes_size};
 use clap::{builder, ArgAction, Args};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{

@@ -5,7 +5,7 @@ use crate::commands::file::{
 use crate::commands::BaseCmdOpt;
 use crate::{
     path_content::{IgnoreFlag, PathContent},
-    utils::utils::{confirm_continue, round_bytes_size},
+    utils::{confirm_continue, round_bytes_size},
 };
 use clap::{builder, Args};
 use std::{

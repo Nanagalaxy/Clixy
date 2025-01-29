@@ -1,10 +1,12 @@
 use crate::commands::BaseCmdOpt;
 use crate::path_content::{IgnoreFlag, PathContent};
 use crate::progress_bar_helper;
-use crate::utils::{add_error, calculate_hash_sha2_256, confirm_continue, round_bytes_size};
+use crate::utils::hash::HashAlgorithm;
+use crate::utils::utils::{add_error, confirm_continue, round_bytes_size};
 use clap::{builder, Args};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use std::fs::{copy, create_dir_all};
+use std::fs::{copy, create_dir_all, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -481,21 +483,46 @@ pub fn verify_copy(
     copied_files
         .par_iter()
         .for_each(|(source_file, destination_file)| {
-            let Ok(source_hash) = calculate_hash_sha2_256(source_file) else {
+            let Ok(mut source_file) = File::open(source_file) else {
                 add_error(
                     list_of_errors,
-                    format!("Error calculating hash for source file {source_file:?}"),
+                    format!("Error opening source file {source_file:?}"),
                 );
                 return;
             };
 
-            let Ok(destination_hash) = calculate_hash_sha2_256(destination_file) else {
+            let mut source_buffer = Vec::new();
+            if source_file.read_to_end(&mut source_buffer).is_err() {
                 add_error(
                     list_of_errors,
-                    format!("Error calculating hash for destination file {destination_file:?}"),
+                    format!("Error reading source file {source_file:?}"),
+                );
+                return;
+            }
+
+            let source_hash = HashAlgorithm::Sha2_256.compute(source_buffer);
+
+            let Ok(mut destination_file) = File::open(destination_file) else {
+                add_error(
+                    list_of_errors,
+                    format!("Error opening destination file {destination_file:?}"),
                 );
                 return;
             };
+
+            let mut destination_buffer = Vec::new();
+            if destination_file
+                .read_to_end(&mut destination_buffer)
+                .is_err()
+            {
+                add_error(
+                    list_of_errors,
+                    format!("Error reading destination file {destination_file:?}"),
+                );
+                return;
+            }
+
+            let destination_hash = HashAlgorithm::Sha2_256.compute(destination_buffer);
 
             if source_hash != destination_hash {
                 add_error(

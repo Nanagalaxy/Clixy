@@ -1,35 +1,9 @@
-use std::{fmt::Display, path::Path};
+use std::{fs::File, io::Read, path::Path};
 
-use clap::{builder, Args, ValueEnum};
+use clap::{builder, Args};
 use hex::encode;
 
-use crate::utils::{
-    calculate_hash_md5, calculate_hash_sha1, calculate_hash_sha2_256, calculate_hash_sha2_512,
-    calculate_hash_sha3_256, calculate_hash_sha3_512,
-};
-
-#[derive(Debug, ValueEnum, Clone, PartialEq)]
-enum HashAlgorithm {
-    Md5,
-    Sha1,
-    Sha2_256,
-    Sha2_512,
-    Sha3_256,
-    Sha3_512,
-}
-
-impl Display for HashAlgorithm {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            HashAlgorithm::Md5 => write!(f, "MD5"),
-            HashAlgorithm::Sha1 => write!(f, "SHA1"),
-            HashAlgorithm::Sha2_256 => write!(f, "SHA2-256"),
-            HashAlgorithm::Sha2_512 => write!(f, "SHA2-512"),
-            HashAlgorithm::Sha3_256 => write!(f, "SHA3-256"),
-            HashAlgorithm::Sha3_512 => write!(f, "SHA3-512"),
-        }
-    }
-}
+use crate::utils::hash::HashAlgorithm;
 
 #[derive(Args, Clone)]
 pub struct Command {
@@ -64,20 +38,19 @@ impl Command {
 
         println!("{}", self.algorithm);
 
-        let hash = match self.algorithm {
-            HashAlgorithm::Md5 => calculate_hash_md5(source_path),
-            HashAlgorithm::Sha1 => calculate_hash_sha1(source_path),
-            HashAlgorithm::Sha2_256 => calculate_hash_sha2_256(source_path),
-            HashAlgorithm::Sha2_512 => calculate_hash_sha2_512(source_path),
-            HashAlgorithm::Sha3_256 => calculate_hash_sha3_256(source_path),
-            HashAlgorithm::Sha3_512 => calculate_hash_sha3_512(source_path),
+        let Ok(mut file) = File::open(source_path) else {
+            eprintln!("Error opening file.");
+            return;
         };
 
-        let result_string = match hash {
-            Ok(hash) => encode(hash),
-            Err(_) => "Error calculating hash.".to_string(),
-        };
+        let mut buffer = Vec::new();
+        if file.read_to_end(&mut buffer).is_err() {
+            eprintln!("Error reading file.");
+            return;
+        }
 
-        println!("{result_string}");
+        let hash = encode(self.algorithm.compute(buffer));
+
+        println!("{hash}");
     }
 }

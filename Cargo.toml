@@ -11,6 +11,7 @@ authors = ["Naexy"]
 
 [dependencies]
 clap = { version = "4.5.27", features = ["cargo", "derive"] }
+digest = "0.10.7"
 fs4 = "0.12.0"
 hex = "0.4.3"
 indicatif = "0.17.11"
@@ -22,6 +23,7 @@ sha2 = "0.10.8"
 sha3 = "0.10.8"
 
 [dev-dependencies]
+rstest = "0.24.0"
 tempfile = "3.16.0"
 
 [[bin]]
@@ -31,6 +33,6 @@ path = "src/main.rs"
 [features]
 default = ["describe"]
 describe = []
+crypto = []
 file = []
 random = []
-crypto = []

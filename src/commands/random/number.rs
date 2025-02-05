@@ -62,5 +62,7 @@ impl Command {
                 print!("{}", self.separator);
             }
         }
+
+        println!();
     }
 }

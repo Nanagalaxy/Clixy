@@ -19,8 +19,6 @@ pub struct BaseCmdOpt {
 #[derive(Args, Clone)]
 pub struct DescribeCmd {
     #[arg(
-        short,
-        long,
         required = true,
         value_parser = builder::NonEmptyStringValueParser::new(),
         help = "The feature to describe."
@@ -30,12 +28,15 @@ pub struct DescribeCmd {
 
 impl DescribeCmd {
     pub fn execute(&self) {
-        match self.feature.to_lowercase().as_str() {
+        match self.feature.trim().to_lowercase().as_str() {
             "describe" => println!(
                 "This feature provides access to the describe command, which allows you to get detailed information about other features. (You're using it right now!)"
             ),
+            "crypto" => println!(
+                "This feature provides access to the crypto command, which allows you to encrypt and decrypt text or hash values."
+            ),
             "file" => println!(
-                "This feature provides access to the copy, remove, and move commands. These commands allow you to copy, remove, or move files, giving you control over file management."
+                "This feature provides access to the file command, which allows you to perform file operations or hashing."
             ),
             "random" => println!(
                 "This feature provides access to the random command, allowing you to generate random numbers, strings, and more."

@@ -4,13 +4,13 @@ mod path_content;
 mod progress_bar_helper;
 mod utils;
 
-use clap::{crate_authors, crate_description, crate_version, Parser, Subcommand};
+use clap::{Parser, Subcommand, crate_authors, crate_description, crate_version};
 
 use commands::{
-    crypto::CryptoCmd,
-    file::{copy, r#move, remove, FileCmd},
-    random::RandomCmd,
     DescribeCmd,
+    crypto::CryptoCmd,
+    file::{FileCmd, copy, r#move, remove},
+    random::RandomCmd,
 };
 
 #[derive(Parser)]

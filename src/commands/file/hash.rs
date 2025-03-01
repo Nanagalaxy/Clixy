@@ -1,6 +1,6 @@
 use std::{fs::File, io::Read, path::Path};
 
-use clap::{builder, Args};
+use clap::{Args, builder};
 use hex::encode;
 
 use crate::utils::hash::HashAlgorithm;

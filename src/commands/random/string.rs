@@ -1,4 +1,4 @@
-use clap::{builder, Args, ValueEnum};
+use clap::{Args, ValueEnum, builder};
 use rand::{
     distr::{Alphanumeric, Distribution, SampleString, Uniform},
     rng,

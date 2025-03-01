@@ -3,9 +3,9 @@ use crate::path_content::{IgnoreFlag, PathContent};
 use crate::progress_bar_helper;
 use crate::utils::hash::HashAlgorithm;
 use crate::utils::{add_error, confirm_continue, round_bytes_size};
-use clap::{builder, Args};
+use clap::{Args, builder};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use std::fs::{copy, create_dir_all, File};
+use std::fs::{File, copy, create_dir_all};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -167,7 +167,9 @@ pub fn execute(cmd: Command) {
         };
 
         if content.count() > 0 {
-            eprintln!("Destination folder exists and is not empty, please provide an empty folder or use an option");
+            eprintln!(
+                "Destination folder exists and is not empty, please provide an empty folder or use an option"
+            );
             return;
         }
     } else if create_dir_all(destination_path).is_err() {

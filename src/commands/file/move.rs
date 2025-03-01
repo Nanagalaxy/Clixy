@@ -1,13 +1,13 @@
+use crate::commands::BaseCmdOpt;
 use crate::commands::file::{
-    copy::{copy_dirs, copy_files, verify_copy, OptionsTypes},
+    copy::{OptionsTypes, copy_dirs, copy_files, verify_copy},
     remove::{remove_dirs, remove_files},
 };
-use crate::commands::BaseCmdOpt;
 use crate::{
     path_content::{IgnoreFlag, PathContent},
     utils::{confirm_continue, round_bytes_size},
 };
-use clap::{builder, Args};
+use clap::{Args, builder};
 use std::{
     path::Path,
     sync::{Arc, Mutex},

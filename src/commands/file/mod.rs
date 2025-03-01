@@ -1,9 +1,9 @@
 use clap::Subcommand;
 
 pub mod copy;
+pub mod hash;
 pub mod r#move;
 pub mod remove;
-pub mod hash;
 
 #[derive(Subcommand, Clone)]
 #[command(about = "File operations", visible_aliases = &["f"])]

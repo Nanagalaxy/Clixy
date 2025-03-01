@@ -3,7 +3,7 @@ pub mod hash;
 
 use rand::distr::{Alphanumeric, SampleString};
 use rand::rng;
-use std::fs::{read_dir, File};
+use std::fs::{File, read_dir};
 use std::io::{Error, ErrorKind, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};

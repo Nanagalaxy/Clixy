@@ -63,11 +63,7 @@ impl PathContent {
             // The contents of the source path will be copied into the destination path
             path.read_dir()?
                 .par_bridge()
-                .filter_map(|entry| {
-                    let entry = entry.ok()?;
-                    let path = entry.path();
-                    Some(path)
-                })
+                .filter_map(|entry| Some(entry.ok()?.path()))
                 .collect()
         } else {
             // For a file, we only need to copy the file itself
@@ -84,21 +80,18 @@ impl PathContent {
                     self.increment_entries(&pb);
                 }
 
-                if let Ok(entries) = read_dir(item) {
-                    for entry in entries {
-                        match entry {
+                let all = read_dir(item)?
+                    .all(|entry_result| {
+                        match entry_result {
                             Ok(entry) => {
                                 list_to_explore.push(entry.path());
+                                true
                             }
-                            Err(_) => {
-                                return Err(Error::new(
-                                    ErrorKind::Other,
-                                    "Error reading directory content",
-                                ));
-                            }
+                            Err(_) => false,
                         }
-                    }
-                } else {
+                    });
+
+                if !all {
                     return Err(Error::new(
                         ErrorKind::Other,
                         "Error reading directory content",

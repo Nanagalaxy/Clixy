@@ -1,4 +1,4 @@
-use clap::{builder, Args};
+use clap::{Args, builder};
 use rand::{
     distr::{Distribution, Uniform},
     rng,

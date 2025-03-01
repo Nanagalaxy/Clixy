@@ -1,4 +1,4 @@
-use clap::{builder, Args};
+use clap::{Args, builder};
 use deunicode::deunicode;
 
 use super::Cipher;

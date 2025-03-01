@@ -1,4 +1,4 @@
-use clap::{builder, Args};
+use clap::{Args, builder};
 
 pub mod crypto;
 pub mod file;
@@ -31,10 +31,19 @@ pub struct DescribeCmd {
 impl DescribeCmd {
     pub fn execute(&self) {
         match self.feature.to_lowercase().as_str() {
-            "describe" => println!("This feature provides access to the describe command, which allows you to get detailed information about other features. (You're using it right now!)"),
-            "file" => println!("This feature provides access to the copy, remove, and move commands. These commands allow you to copy, remove, or move files, giving you control over file management."),
-            "random" => println!("This feature provides access to the random command, allowing you to generate random numbers, strings, and more."),
-            _ => println!("The feature '{}' is not available or is not yet implemented.", self.feature),
+            "describe" => println!(
+                "This feature provides access to the describe command, which allows you to get detailed information about other features. (You're using it right now!)"
+            ),
+            "file" => println!(
+                "This feature provides access to the copy, remove, and move commands. These commands allow you to copy, remove, or move files, giving you control over file management."
+            ),
+            "random" => println!(
+                "This feature provides access to the random command, allowing you to generate random numbers, strings, and more."
+            ),
+            _ => println!(
+                "The feature '{}' is not available or is not yet implemented.",
+                self.feature
+            ),
         }
     }
 }

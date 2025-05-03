@@ -3,7 +3,7 @@ use crate::path_content::{IgnoreFlag, PathContent};
 use crate::progress_bar_helper;
 use crate::utils::hash::HashAlgorithm;
 use crate::utils::{add_error, confirm_continue, round_bytes_size};
-use clap::{Args, builder};
+use clap::{Args, ValueHint, builder};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs::{File, copy, create_dir_all};
 use std::io::Read;
@@ -53,7 +53,8 @@ pub struct Command {
         long,
         required = true,
         value_parser = builder::NonEmptyStringValueParser::new(),
-        help = "The source path to copy from."
+        help = "The source path to copy from.",
+        value_hint = ValueHint::AnyPath,
     )]
     source: String,
 
@@ -62,7 +63,8 @@ pub struct Command {
         long,
         required = true,
         value_parser = builder::NonEmptyStringValueParser::new(),
-        help = "The destination path to copy to. This will be created if it doesn't exist."
+        help = "The destination path to copy to. This will be created if it doesn't exist.",
+        value_hint = ValueHint::AnyPath,
     )]
     destination: String,
 

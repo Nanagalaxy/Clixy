@@ -15,6 +15,8 @@ pub enum CryptoCmd {
 
 #[derive(Debug, ValueEnum, Clone, PartialEq)]
 enum Cipher {
+    #[value(help = "Encrypt a message using the Caesar cipher")]
     Encrypt,
+    #[value(help = "Decrypt a message using the Caesar cipher")]
     Decrypt,
 }

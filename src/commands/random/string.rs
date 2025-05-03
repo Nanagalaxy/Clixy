@@ -1,4 +1,4 @@
-use clap::{Args, ValueEnum, builder};
+use clap::{Args, ValueEnum, ValueHint, builder};
 use rand::{
     distr::{Alphanumeric, Distribution, SampleString, Uniform},
     rng,
@@ -21,7 +21,8 @@ pub struct Command {
         long,
         default_value_t = 20,
         value_parser = builder::RangedU64ValueParser::<usize>::new(),
-        help = "Size of the string to generate."
+        help = "Size of the string to generate.",
+        value_hint = ValueHint::Other,
     )]
     size: usize,
 
@@ -32,7 +33,8 @@ pub struct Command {
         action = clap::ArgAction::Append,
         num_args(1..),
         help = "Specify one or more character sets to include. \
-                If no sets are specified, the default set is alphanumeric (a-z, A-Z and 0-9)."
+                If no sets are specified, the default set is alphanumeric (a-z, A-Z and 0-9).",
+        value_hint = ValueHint::Other,
     )]
     charsets: Vec<Charset>,
 }

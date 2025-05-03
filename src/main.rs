@@ -7,7 +7,7 @@ mod utils;
 use clap::{Parser, Subcommand, crate_authors, crate_description, crate_version};
 
 use commands::{
-    DescribeCmd,
+    CompletionCmd, DescribeCmd,
     crypto::CryptoCmd,
     file::{FileCmd, copy, r#move, remove},
     random::RandomCmd,
@@ -52,8 +52,9 @@ impl ArgsCli {
 #[derive(Subcommand, Clone)]
 enum Commands {
     #[cfg(feature = "describe")]
-    #[command(about = "Describe a feature", visible_aliases = &["d", "desc"])]
     Describe(DescribeCmd),
+
+    Completion(CompletionCmd),
 
     #[cfg(feature = "crypto")]
     #[command(subcommand)]
@@ -74,6 +75,9 @@ fn main() {
     match args.command {
         #[cfg(feature = "describe")]
         Commands::Describe(command) => {
+            command.execute();
+        }
+        Commands::Completion(command) => {
             command.execute();
         }
         #[cfg(feature = "crypto")]

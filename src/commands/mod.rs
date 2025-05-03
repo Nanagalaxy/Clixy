@@ -1,8 +1,11 @@
-use clap::{Args, builder};
-
+pub mod completion;
 pub mod crypto;
 pub mod file;
 pub mod random;
+
+pub use completion::CompletionCmd;
+
+use clap::{Args, ValueHint, builder};
 
 /// A struct that holds the options available for all commands.
 #[derive(Args, Clone)]
@@ -11,17 +14,20 @@ pub struct BaseCmdOpt {
         long,
         default_value = "10",
         value_parser = builder::RangedU64ValueParser::<usize>::new(),
-        help = "Set the number of worker threads to use. Must be greater than 0. If an error occurs, the default value is used but the user must confirm the operation."
+        help = "Set the number of worker threads to use. Must be greater than 0. If an error occurs, the default value is used but the user must confirm the operation.",
+        value_hint = ValueHint::Other,
     )]
     workers: usize,
 }
 
 #[derive(Args, Clone)]
+#[command(about = "Describe a feature", visible_aliases = &["d", "desc"])]
 pub struct DescribeCmd {
     #[arg(
         required = true,
         value_parser = builder::NonEmptyStringValueParser::new(),
-        help = "The feature to describe."
+        help = "The feature to describe. Available options: describe, crypto, file, random.",
+        value_hint = ValueHint::Other,
     )]
     feature: String,
 }

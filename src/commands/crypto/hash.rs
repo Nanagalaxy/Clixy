@@ -1,4 +1,4 @@
-use clap::{Args, builder};
+use clap::{Args, ValueHint, builder};
 use hex::encode;
 
 use crate::utils::hash::HashAlgorithm;
@@ -8,7 +8,8 @@ pub struct Command {
     #[arg(
         required = true,
         value_parser = builder::NonEmptyStringValueParser::new(),
-        help = "The string to hash."
+        help = "The string to hash.",
+        value_hint = ValueHint::Other,
     )]
     value: String,
 
@@ -20,7 +21,8 @@ pub struct Command {
         action = clap::ArgAction::Set,
         num_args = 1,
         ignore_case = true,
-        help = "Specify the hash algorithm to use."
+        help = "Specify the hash algorithm to use.",
+        value_hint = ValueHint::Other,
     )]
     algorithm: HashAlgorithm,
 }

@@ -7,7 +7,7 @@ use crate::{
     path_content::{IgnoreFlag, PathContent},
     utils::{confirm_continue, round_bytes_size},
 };
-use clap::{Args, builder};
+use clap::{Args, ValueHint, builder};
 use std::{
     path::Path,
     sync::{Arc, Mutex},
@@ -20,7 +20,8 @@ pub struct Command {
         long,
         required = true,
         value_parser = builder::NonEmptyStringValueParser::new(),
-        help = "The source path to move from."
+        help = "The source path to move from.",
+        value_hint = ValueHint::AnyPath,
     )]
     pub source: String,
 
@@ -29,7 +30,8 @@ pub struct Command {
         long,
         required = true,
         value_parser = builder::NonEmptyStringValueParser::new(),
-        help = "The destination path to move to. This will be created if it doesn't exist."
+        help = "The destination path to move to. This will be created if it doesn't exist.",
+        value_hint = ValueHint::AnyPath,
     )]
     destination: String,
 

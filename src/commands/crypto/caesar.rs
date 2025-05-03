@@ -1,4 +1,4 @@
-use clap::{Args, builder};
+use clap::{Args, ValueHint, builder};
 use deunicode::deunicode;
 
 use super::Cipher;
@@ -10,14 +10,16 @@ pub struct Command {
         action = clap::ArgAction::Set,
         num_args = 1,
         ignore_case = true,
-        help = "Specify the operation to perform."
+        help = "Specify the operation to perform.",
+        value_hint = ValueHint::Other,
     )]
     cipher: Cipher,
 
     #[arg(
         required = true,
         value_parser = builder::NonEmptyStringValueParser::new(),
-        help = "The string to encrypt or decrypt."
+        help = "The string to encrypt or decrypt.",
+        value_hint = ValueHint::Other,
     )]
     value: String,
 
@@ -27,7 +29,8 @@ pub struct Command {
         default_value_t = 3,
         value_parser = builder::RangedI64ValueParser::<i64>::new(),
         allow_hyphen_values = true,
-        help = "The shift value to use for the Caesar cipher."
+        help = "The shift value to use for the Caesar cipher.",
+        value_hint = ValueHint::Other,
     )]
     shift: i64,
 }

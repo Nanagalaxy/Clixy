@@ -2,7 +2,7 @@ use crate::commands::BaseCmdOpt;
 use crate::path_content::{IgnoreFlag, PathContent};
 use crate::progress_bar_helper;
 use crate::utils::{add_error, confirm_continue, round_bytes_size};
-use clap::{ArgAction, Args, builder};
+use clap::{ArgAction, Args, ValueHint, builder};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::BTreeMap,
@@ -18,7 +18,8 @@ pub struct Command {
         long,
         required = true,
         value_parser = builder::NonEmptyStringValueParser::new(),
-        help = "The source path to remove from."
+        help = "The source path to remove from.",
+        value_hint = ValueHint::AnyPath,
     )]
     source: String,
 

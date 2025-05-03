@@ -1,4 +1,4 @@
-use clap::{Args, builder};
+use clap::{Args, ValueHint, builder};
 use rand::{
     distr::{Distribution, Uniform},
     rng,
@@ -10,7 +10,8 @@ pub struct Command {
         long,
         default_value = "0",
         value_parser = builder::RangedU64ValueParser::<usize>::new(),
-        help = "Minimum value of the random number."
+        help = "Minimum value of the random number.",
+        value_hint = ValueHint::Other,
     )]
     min: usize,
 
@@ -18,7 +19,8 @@ pub struct Command {
         long,
         default_value = "100",
         value_parser = builder::RangedU64ValueParser::<usize>::new(),
-        help = "Maximum value of the random number."
+        help = "Maximum value of the random number.",
+        value_hint = ValueHint::Other,
     )]
     max: usize,
 
@@ -27,7 +29,8 @@ pub struct Command {
         long,
         default_value = "1",
         value_parser = builder::RangedU64ValueParser::<usize>::new(),
-        help = "Number of times to repeat the command. Each number will be printed on a new line."
+        help = "Number of times to repeat the command. Each number will be printed on a new line.",
+        value_hint = ValueHint::Other,
     )]
     repeat: usize,
 
@@ -36,7 +39,8 @@ pub struct Command {
         long,
         default_value = "\n",
         value_parser = builder::StringValueParser::new(),
-        help = "Separator to use between numbers."
+        help = "Separator to use between numbers.",
+        value_hint = ValueHint::Other,
     )]
     separator: String,
 }

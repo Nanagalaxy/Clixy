@@ -1,31 +1,34 @@
 [package]
 name = "clixy"
-description = "A CLI tool."
 version = "0.11.0"
 edition = "2024"
+rust-version = "1.86.0"
+description = "A CLI tool."
 readme = "README.md"
 repository = "https://github.com/Nanagalaxy/Clixy"
-authors = ["Naexy"]
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.5.31", features = ["cargo", "derive"] }
-deunicode = "1.6.0"
+clap = { version = "4.5.37", features = ["cargo", "derive"] }
+clap_complete = "4.5.48"
+clap_complete_nushell = "4.5.5"
+deunicode = "1.6.2"
 digest = "0.10.7"
-fs4 = "0.13.0"
+fs4 = "0.13.1"
 hex = "0.4.3"
 indicatif = "0.17.11"
 md-5 = "0.10.6"
-rand = "0.9.0"
+rand = "0.9.1"
 rayon = "1.10.0"
 sha1 = "0.10.6"
-sha2 = "0.10.8"
+sha2 = "0.10.9"
 sha3 = "0.10.8"
 
 [dev-dependencies]
-rstest = "0.24.0"
-tempfile = "3.17.1"
+rstest = "0.25.0"
+tempfile = "3.19.1"
 
 [[bin]]
 name = "clixy"
